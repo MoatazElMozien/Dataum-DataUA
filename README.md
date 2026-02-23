@@ -15,8 +15,5 @@ A browser-based academic reporting tool that transforms Excel and CSV grade shee
 - 4 built-in themes including Dark mode
 - Runs 100% locally — no server, no login, no data upload
 
-## How to Use
-Download `index.html` and open it in any modern browser, or use the live app link above.
-
 ## About Dataum
 Dataum is a startup building customized, widely-featured applications for universities, factories, and companies.
