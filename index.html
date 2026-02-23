@@ -54,6 +54,12 @@
             --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
             --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
 
+            /* Input Box Colors */
+            --input-bg: #ffffff;
+            --input-text: #1a1a1a;
+            --input-border: #c8d0e0;
+            --input-bg-focus: #f0f7ff;
+
             /* DataUA Official Colors */
             --ejust-primary: #003366;
             --ejust-secondary: #0066cc;
@@ -84,6 +90,11 @@
             --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
             --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
             --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
+
+            --input-bg: #1e2640;
+            --input-text: #e8edf5;
+            --input-border: #3d4a6b;
+            --input-bg-focus: #252d48;
         }
 
         /* DataUA Official Theme */
@@ -106,6 +117,11 @@
             --accent-primary: #f30b0b;
             --accent-secondary: #e78477;
             --accent-hover: #00060c;
+
+            --input-bg: #ffffff;
+            --input-text: #003366;
+            --input-border: #a0b4cc;
+            --input-bg-focus: #eef4ff;
         }
 
         /* High Contrast Theme */
@@ -123,6 +139,11 @@
             --accent-secondary: #ff00ff;
 
             --border-color: #ffffff;
+
+            --input-bg: #1a1a1a;
+            --input-text: #ffffff;
+            --input-border: #ffffff;
+            --input-bg-focus: #2a2a2a;
         }
 
         * {
@@ -484,24 +505,25 @@
 
         /* Forms */
         .form-control-custom {
-            background: rgba(37, 43, 72, 0.8);
-            border: 2px solid var(--border-color);
+            background: var(--input-bg);
+            border: 2px solid var(--input-border);
             border-radius: 8px;
-            color: var(--text-primary);
+            color: var(--input-text);
             padding: 0.75rem 1rem;
             transition: all 0.3s;
         }
 
         .form-control-custom:focus {
-            background: rgba(37, 43, 72, 1);
+            background: var(--input-bg-focus);
             border-color: var(--accent-primary);
             box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
-            color: var(--text-primary);
+            color: var(--input-text);
             outline: none;
         }
 
         .form-control-custom::placeholder {
             color: var(--text-muted);
+            opacity: 0.7;
         }
 
         .form-label-custom {
@@ -1924,6 +1946,25 @@
                 </div>
             </div>
 
+            <!-- Input Box Colors -->
+            <div class="color-group">
+                <div class="color-group-title">
+                    <i class="bi bi-input-cursor-text"></i>Input Boxes
+                </div>
+                <div class="color-picker-wrapper">
+                    <label>Input Background</label>
+                    <input type="color" id="colorInputBg" value="#ffffff" onchange="updateTheme()">
+                </div>
+                <div class="color-picker-wrapper">
+                    <label>Input Text Color</label>
+                    <input type="color" id="colorInputText" value="#1a1a1a" onchange="updateTheme()">
+                </div>
+                <div class="color-picker-wrapper">
+                    <label>Input Border</label>
+                    <input type="color" id="colorInputBorder" value="#c8d0e0" onchange="updateTheme()">
+                </div>
+            </div>
+
             <div class="separator" style="margin: 1.5rem 0;"></div>
 
             <div class="color-group">
@@ -2876,6 +2917,11 @@
             // Border color
             const bc = document.getElementById('colorBorder')?.value || '#313a57';
 
+            // Input box colors
+            const ib = document.getElementById('colorInputBg')?.value || '#ffffff';
+            const it = document.getElementById('colorInputText')?.value || '#1a1a1a';
+            const ibr = document.getElementById('colorInputBorder')?.value || '#c8d0e0';
+
             // Apply to CSS variables
             document.documentElement.style.setProperty('--bg-primary', bp);
             document.documentElement.style.setProperty('--bg-secondary', bs);
@@ -2891,10 +2937,15 @@
             document.documentElement.style.setProperty('--warning', wc);
             document.documentElement.style.setProperty('--danger', dc);
             document.documentElement.style.setProperty('--border-color', bc);
+            document.documentElement.style.setProperty('--input-bg', ib);
+            document.documentElement.style.setProperty('--input-text', it);
+            document.documentElement.style.setProperty('--input-border', ibr);
+            // Derive focus color (lighten the input bg slightly toward accent)
+            document.documentElement.style.setProperty('--input-bg-focus', ib);
 
             // Save to localStorage
             const prefs = JSON.parse(localStorage.getItem('swWorkspace') || '{}');
-            prefs.theme = { bp, bs, bt, se, ap, as, at, tp, ts, tm, sc, wc, dc, bc };
+            prefs.theme = { bp, bs, bt, se, ap, as, at, tp, ts, tm, sc, wc, dc, bc, ib, it, ibr };
             localStorage.setItem('swWorkspace', JSON.stringify(prefs));
         }
 
@@ -2916,6 +2967,9 @@
                 if (document.getElementById('colorWarning')) document.getElementById('colorWarning').value = t.wc || '#ffb800';
                 if (document.getElementById('colorDanger')) document.getElementById('colorDanger').value = t.dc || '#ff4757';
                 if (document.getElementById('colorBorder')) document.getElementById('colorBorder').value = t.bc || '#313a57';
+                if (document.getElementById('colorInputBg')) document.getElementById('colorInputBg').value = t.ib || '#ffffff';
+                if (document.getElementById('colorInputText')) document.getElementById('colorInputText').value = t.it || '#1a1a1a';
+                if (document.getElementById('colorInputBorder')) document.getElementById('colorInputBorder').value = t.ibr || '#c8d0e0';
                 updateTheme();
             }
         }
@@ -4953,13 +5007,10 @@
         function downloadPDF() {
             console.log('PDF generation started');
 
-            // Check if html2pdf is loaded
             if (typeof html2pdf === 'undefined') {
                 alert('PDF library not loaded. Please refresh the page and try again.');
-                console.error('html2pdf is not defined');
                 return;
             }
-
             if (!currentResults) {
                 alert('No results to export. Please generate results first.');
                 return;
@@ -4970,160 +5021,161 @@
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating PDF...';
             btn.disabled = true;
 
-            // Get the results section
-            const resultsSection = document.getElementById('step6');
+            // Stop all Chart.js animations so toDataURL() captures a complete frame
+            charts.forEach(c => { try { c.stop(); } catch(e) {} });
 
-            // Create a clean copy for PDF
+            // Short delay to ensure final animation frame is painted before capture
+            setTimeout(function() {
+                _buildAndDownloadPDF(btn, orig);
+            }, 300);
+        }
+
+        function _buildAndDownloadPDF(btn, orig) {
+            // Build PDF container using appendChild (never innerHTML +=)
+            // to avoid re-serializing large base64 images on every append.
             const pdfContainer = document.createElement('div');
-            pdfContainer.style.cssText = 'background: white; padding: 20px; color: #000;';
+            pdfContainer.style.cssText = [
+                'position:absolute', 'left:-9999px', 'top:0',
+                'width:794px',          // A4 width at 96dpi
+                'background:white', 'padding:20px', 'color:#000',
+                'font-family:Arial,sans-serif'
+            ].join(';');
 
-            // Add header
-            pdfContainer.innerHTML = `
-        <div style="text-align: center; margin-bottom: 30px; border-bottom: 3px solid #003366; padding-bottom: 20px;">
-            <h1 style="margin: 0; font-size: 32px; color: #003366; font-weight: bold;">DataUA</h1>
-            <h2 style="margin: 10px 0 0 0; font-size: 20px; color: #0066cc;">Assessment Report</h2>
-            <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">
-                Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}
-            </p>
-        </div>
-    `;
+            // --- HEADER ---
+            const header = document.createElement('div');
+            header.innerHTML = `
+                <div style="text-align:center;margin-bottom:24px;border-bottom:3px solid #003366;padding-bottom:16px;">
+                    <h1 style="margin:0;font-size:28px;color:#003366;font-weight:bold;">DataUA</h1>
+                    <h2 style="margin:8px 0 0;font-size:17px;color:#0066cc;">Assessment Report</h2>
+                    <p style="margin:8px 0 0;font-size:13px;color:#666;">
+                        Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}
+                    </p>
+                </div>`;
+            pdfContainer.appendChild(header);
 
-            // Add statistics
-            const statsHTML = `
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px;">
-            <div style="border: 2px solid #003366; padding: 15px; text-align: center; border-radius: 8px;">
-                <div style="font-size: 28px; font-weight: bold; color: #003366;">${document.getElementById('statTotal').textContent}</div>
-                <div style="font-size: 12px; color: #666; margin-top: 5px;">Total Students</div>
-            </div>
-            <div style="border: 2px solid #00aa00; padding: 15px; text-align: center; border-radius: 8px;">
-                <div style="font-size: 28px; font-weight: bold; color: #00aa00;">${document.getElementById('statAvg').textContent}</div>
-                <div style="font-size: 12px; color: #666; margin-top: 5px;">Average Score</div>
-            </div>
-            <div style="border: 2px solid #ff9900; padding: 15px; text-align: center; border-radius: 8px;">
-                <div style="font-size: 28px; font-weight: bold; color: #ff9900;">${document.getElementById('statHigh').textContent}</div>
-                <div style="font-size: 12px; color: #666; margin-top: 5px;">Highest Score</div>
-            </div>
-            <div style="border: 2px solid #dd0000; padding: 15px; text-align: center; border-radius: 8px;">
-                <div style="font-size: 28px; font-weight: bold; color: #dd0000;">${document.getElementById('statLow').textContent}</div>
-                <div style="font-size: 12px; color: #666; margin-top: 5px;">Lowest Score</div>
-            </div>
-        </div>
-    `;
-            pdfContainer.innerHTML += statsHTML;
+            // --- STATISTICS ---
+            const stats = document.createElement('div');
+            stats.innerHTML = `
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">
+                    <div style="border:2px solid #003366;padding:12px;text-align:center;border-radius:8px;">
+                        <div style="font-size:24px;font-weight:bold;color:#003366;">${document.getElementById('statTotal').textContent}</div>
+                        <div style="font-size:11px;color:#666;margin-top:4px;">Total Students</div>
+                    </div>
+                    <div style="border:2px solid #00aa00;padding:12px;text-align:center;border-radius:8px;">
+                        <div style="font-size:24px;font-weight:bold;color:#00aa00;">${document.getElementById('statAvg').textContent}</div>
+                        <div style="font-size:11px;color:#666;margin-top:4px;">Average Score</div>
+                    </div>
+                    <div style="border:2px solid #ff9900;padding:12px;text-align:center;border-radius:8px;">
+                        <div style="font-size:24px;font-weight:bold;color:#ff9900;">${document.getElementById('statHigh').textContent}</div>
+                        <div style="font-size:11px;color:#666;margin-top:4px;">Highest Score</div>
+                    </div>
+                    <div style="border:2px solid #dd0000;padding:12px;text-align:center;border-radius:8px;">
+                        <div style="font-size:24px;font-weight:bold;color:#dd0000;">${document.getElementById('statLow').textContent}</div>
+                        <div style="font-size:11px;color:#666;margin-top:4px;">Lowest Score</div>
+                    </div>
+                </div>`;
+            pdfContainer.appendChild(stats);
 
-            // Add charts as images - CHECK IF MULTI-CHART MODE
-            let chartsHTML = '';
+            // --- CHARTS ---
+            const chartsSection = document.createElement('div');
+            chartsSection.innerHTML = '<h3 style="color:#003366;border-bottom:2px solid #0066cc;padding-bottom:8px;margin-bottom:12px;">Performance Visualization</h3>';
 
             if (multiChartMode && selectedCharts.length > 0) {
-                // MULTI-CHART MODE: Add all selected charts
-                chartsHTML += `
-            <div style="margin-bottom: 30px; page-break-inside: avoid;">
-                <h3 style="color: #003366; border-bottom: 2px solid #0066cc; padding-bottom: 10px; margin-bottom: 15px;">
-                    Performance Visualizations
-                </h3>
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
-        `;
+                const grid = document.createElement('div');
+                grid.style.cssText = 'display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:24px;';
 
                 selectedCharts.forEach((chartType, index) => {
-                    const chartCanvas = document.getElementById(`chart${index + 1}`);
-                    if (chartCanvas) {
+                    const canvas = document.getElementById('chart' + (index + 1));
+                    if (canvas) {
                         try {
-                            const chartImage = chartCanvas.toDataURL('image/png', 1.0);
-                            const chartTitle = chartType.charAt(0).toUpperCase() + chartType.slice(1) + ' Chart';
-                            chartsHTML += `
-                        <div style="text-align: center; page-break-inside: avoid;">
-                            <h4 style="color: #0066cc; margin-bottom: 10px; font-size: 14px;">${chartTitle}</h4>
-                            <img src="${chartImage}" style="width: 100%; max-height: 300px; object-fit: contain;" />
-                        </div>
-                    `;
-                        } catch (e) {
-                            console.error('Error capturing chart ' + (index + 1), e);
-                        }
+                            const img = document.createElement('img');
+                            img.src = canvas.toDataURL('image/png', 1.0);
+                            img.style.cssText = 'width:100%;height:auto;display:block;';
+                            const cell = document.createElement('div');
+                            cell.style.cssText = 'text-align:center;';
+                            const title = document.createElement('h4');
+                            title.textContent = chartType.charAt(0).toUpperCase() + chartType.slice(1) + ' Chart';
+                            title.style.cssText = 'color:#0066cc;font-size:13px;margin-bottom:6px;';
+                            cell.appendChild(title);
+                            cell.appendChild(img);
+                            grid.appendChild(cell);
+                        } catch(e) { console.error('Chart capture error', e); }
                     }
                 });
-
-                chartsHTML += `
-                </div>
-            </div>
-        `;
+                chartsSection.appendChild(grid);
             } else {
-                // SINGLE CHART MODE: Add main chart only
-                const mainChart = document.getElementById('mainChart');
-                if (mainChart) {
+                const canvas = document.getElementById('mainChart');
+                if (canvas) {
                     try {
-                        const chartImage = mainChart.toDataURL('image/png', 1.0);
-                        chartsHTML += `
-                    <div style="margin-bottom: 30px; page-break-inside: avoid;">
-                        <h3 style="color: #003366; border-bottom: 2px solid #0066cc; padding-bottom: 10px; margin-bottom: 15px;">
-                            Performance Visualization
-                        </h3>
-                        <img src="${chartImage}" style="width: 100%; max-height: 400px; object-fit: contain;" />
-                    </div>
-                `;
-                    } catch (e) {
-                        console.error('Error capturing main chart', e);
-                    }
+                        const img = document.createElement('img');
+                        img.src = canvas.toDataURL('image/png', 1.0);
+                        img.style.cssText = 'width:100%;max-height:380px;object-fit:contain;display:block;margin-bottom:24px;';
+                        chartsSection.appendChild(img);
+                    } catch(e) { console.error('Main chart capture error', e); }
                 }
             }
+            pdfContainer.appendChild(chartsSection);
 
-            pdfContainer.innerHTML += chartsHTML;
+            // --- RESULTS TABLE ---
+            const sourceTable = document.querySelector('#resultsTableContainer table');
+            if (sourceTable) {
+                const tableSection = document.createElement('div');
+                tableSection.style.cssText = 'margin-top:8px;';
 
-            // Add results table
-            const resultsTable = document.querySelector('#resultsTableContainer table');
-            if (resultsTable) {
-                const tableClone = resultsTable.cloneNode(true);
+                const tableHeading = document.createElement('h3');
+                tableHeading.textContent = 'Results Table';
+                tableHeading.style.cssText = 'color:#003366;border-bottom:2px solid #0066cc;padding-bottom:8px;margin-bottom:12px;';
+                tableSection.appendChild(tableHeading);
 
-                // Style the table for PDF
-                tableClone.style.cssText = 'width: 100%; border-collapse: collapse; margin-bottom: 30px;';
+                // Deep clone so we don't alter the live table
+                const tableClone = sourceTable.cloneNode(true);
+                tableClone.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
                 tableClone.querySelectorAll('th').forEach(th => {
-                    th.style.cssText = 'background: #003366; color: white; padding: 12px; text-align: left; border: 1px solid #000; font-weight: bold;';
+                    th.style.cssText = 'background:#003366;color:white;padding:8px 10px;text-align:left;border:1px solid #002244;font-weight:bold;';
                 });
                 tableClone.querySelectorAll('td').forEach(td => {
-                    td.style.cssText = 'padding: 10px; border: 1px solid #333; color: #000;';
+                    td.style.cssText = 'padding:7px 10px;border:1px solid #ccc;color:#000;background:white;';
                 });
-                tableClone.querySelectorAll('.badge-custom').forEach(badge => {
-                    badge.style.cssText = 'padding: 4px 12px; border-radius: 12px; font-weight: bold; display: inline-block;';
+                tableClone.querySelectorAll('.badge-custom').forEach(b => {
+                    b.style.cssText = 'padding:3px 10px;border-radius:10px;font-weight:bold;display:inline-block;font-size:11px;';
                 });
-
-                pdfContainer.innerHTML += `
-            <div style="page-break-inside: avoid;">
-                <h3 style="color: #003366; border-bottom: 2px solid #0066cc; padding-bottom: 10px; margin-bottom: 15px;">
-                    Results Table
-                </h3>
-                ${tableClone.outerHTML}
-            </div>
-        `;
+                // Remove any dark backgrounds left on cells from the theme
+                tableClone.querySelectorAll('tr').forEach((tr, i) => {
+                    tr.style.background = i % 2 === 0 ? '#ffffff' : '#f5f8fc';
+                });
+                tableSection.appendChild(tableClone);
+                pdfContainer.appendChild(tableSection);
             }
 
-            // Add footer
-            pdfContainer.innerHTML += `
-        <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #ccc; text-align: center; color: #666; font-size: 12px;">
-            <p>Generated by DataUA by Dataum · v0.37 beta</p>
-            <p>© ${new Date().getFullYear()} Dataum</p>
-        </div>
-    `;
+            // --- FOOTER ---
+            const footer = document.createElement('div');
+            footer.innerHTML = `
+                <div style="margin-top:32px;padding-top:16px;border-top:2px solid #ccc;text-align:center;color:#666;font-size:11px;">
+                    <p>Generated by DataUA by Dataum · v0.37 beta</p>
+                    <p>© ${new Date().getFullYear()} Dataum</p>
+                </div>`;
+            pdfContainer.appendChild(footer);
 
-            // Append to body temporarily
+            // Attach to body so html2pdf can measure layout
             document.body.appendChild(pdfContainer);
 
-            // Generate PDF
             const opt = {
-                margin: [15, 15, 15, 15],
+                margin: [10, 10, 10, 10],
                 filename: `DataUA_Report_${new Date().toISOString().split('T')[0]}.pdf`,
-                image: { type: 'jpeg', quality: 0.98 },
+                image: { type: 'jpeg', quality: 0.95 },
                 html2canvas: {
                     scale: 2,
                     useCORS: true,
                     backgroundColor: '#ffffff',
                     logging: false,
-                    letterRendering: true
+                    allowTaint: true
                 },
                 jsPDF: {
                     unit: 'mm',
                     format: 'a4',
                     orientation: 'portrait'
                 },
-                pagebreak: { mode: ['avoid-all', 'css'] }
+                pagebreak: { mode: 'css', before: '.pdf-page-break' }
             };
 
             html2pdf()
@@ -5133,20 +5185,18 @@
                 .then(() => {
                     btn.innerHTML = orig;
                     btn.disabled = false;
-                    document.body.removeChild(pdfContainer);
+                    if (document.body.contains(pdfContainer)) document.body.removeChild(pdfContainer);
                 })
                 .catch((err) => {
                     console.error('PDF Error:', err);
-                    alert('PDF generation encountered an error. Please try the Print option (Ctrl+P) instead.');
+                    alert('PDF generation failed. Please try the Print button instead.');
                     btn.innerHTML = orig;
                     btn.disabled = false;
-                    if (document.body.contains(pdfContainer)) {
-                        document.body.removeChild(pdfContainer);
-                    }
+                    if (document.body.contains(pdfContainer)) document.body.removeChild(pdfContainer);
                 });
         }
 
-        // ================================================================
+                // ================================================================
         //  FIXED PRINT FUNCTION
         // ================================================================
 
