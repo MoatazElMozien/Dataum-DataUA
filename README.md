@@ -15,5 +15,5 @@ A browser-based academic reporting tool that transforms Excel and CSV grade shee
 - 4 built-in themes including Dark mode
 - Runs 100% locally — no server, no login, no data upload
 
-## About Dataum
+## About Nodal
 Dataum is a startup building customized, widely-featured applications for universities, factories, and companies.
