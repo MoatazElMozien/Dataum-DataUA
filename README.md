@@ -4,7 +4,7 @@
 
 A browser-based academic reporting tool that transforms Excel and CSV grade sheets into formatted, printable assessment reports — with no installation required and no data ever leaving your device.
 
-🔗 **Live App:** [dataua.netlify.app](https://dataua.netlify.app)
+🔗 **Live App:** [dataum-data-ua.vercel.app](https://dataum-data-ua.vercel.app/)
 
 ## Features
 - Upload Excel (.xlsx, .xls) or CSV files
