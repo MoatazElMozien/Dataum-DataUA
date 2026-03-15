@@ -2341,6 +2341,10 @@
         /* Dot pattern — almost invisible */
         body::before { opacity: 0.2 !important; }
     
+        /* ══ ERD SCHEMA PANEL ══ */
+        #erdPanel.open { right: 0 !important; }
+        .erd-row-hover:hover { filter: brightness(.96); cursor: pointer; }
+
         /* ── Stats Grid ── */
         #statsGrid {
             display: grid;
@@ -2491,6 +2495,11 @@
             <button class="nav-item" onclick="downloadDemoFile()">
                 <i class="bi bi-file-earmark-spreadsheet-fill nav-icon"></i>
                 Demo File
+            </button>
+
+            <button class="nav-item" onclick="openERDSchema()" id="sidebarSchemaBtn" style="display:none;">
+                <i class="bi bi-diagram-3 nav-icon"></i>
+                Schema View
             </button>
 
         </nav>
@@ -2648,9 +2657,16 @@
                 <div class="fs-bc-arrow">›</div>
                 <div class="fs-bc-step" id="fsbc-results"><div class="fs-bc-dot"></div>Results</div>
             </div>
-            <button onclick="navigate('dashboard')" style="background:rgba(220,38,38,.06);border:1.5px solid rgba(220,38,38,.2);color:var(--danger);cursor:pointer;font-size:.72rem;padding:.3rem .75rem;border-radius:7px;font-weight:700;display:flex;align-items:center;gap:.35rem;" onmouseenter="this.style.background='rgba(220,38,38,.12)'" onmouseleave="this.style.background='rgba(220,38,38,.06)'">
-                <i class="bi bi-x-lg"></i> Close
-            </button>
+            <div style="display:flex;align-items:center;gap:.5rem;">
+                <button id="btnSchemaView" onclick="openERDSchema()" title="Schema View — visualize column structure"
+                    style="display:none;background:rgba(99,102,241,.08);border:1.5px solid rgba(99,102,241,.25);color:#6366f1;cursor:pointer;font-size:.72rem;padding:.3rem .75rem;border-radius:7px;font-weight:700;display:none;align-items:center;gap:.35rem;"
+                    onmouseenter="this.style.background='rgba(99,102,241,.15)'" onmouseleave="this.style.background='rgba(99,102,241,.08)'">
+                    <i class="bi bi-diagram-3"></i> Schema
+                </button>
+                <button onclick="navigate('dashboard')" style="background:rgba(220,38,38,.06);border:1.5px solid rgba(220,38,38,.2);color:var(--danger);cursor:pointer;font-size:.72rem;padding:.3rem .75rem;border-radius:7px;font-weight:700;display:flex;align-items:center;gap:.35rem;" onmouseenter="this.style.background='rgba(220,38,38,.12)'" onmouseleave="this.style.background='rgba(220,38,38,.06)'">
+                    <i class="bi bi-x-lg"></i> Close
+                </button>
+            </div>
         </div>
 
         <!-- Fullscreen step content (steps 1-5) -->
@@ -7918,6 +7934,7 @@
             currentHeaderRowIdx = rowIdx;
             headers = raw[rowIdx];
             dataRows = raw.slice(rowIdx + 1).filter(row => row.some(cell => cell !== ''));
+            setTimeout(_updateSchemaBtn, 100);
             // Transition to Phase B
             document.getElementById('editorPhaseA').style.display = 'none';
             document.getElementById('editorPhaseB').style.display = '';
@@ -8159,6 +8176,8 @@
 
             updateConfigUI();
             colModal.hide();
+            const _erdP = document.getElementById('erdPanel');
+            if (_erdP && _erdP.classList.contains('open')) _renderERD();
         }
 
         function clearRole() {
@@ -9618,653 +9637,69 @@
         function renderChart(results, type) {
             charts.forEach(c => c.destroy());
             charts = [];
-            // Hide chart empty state
             const ce = document.getElementById('chartEmptyState');
             if (ce) ce.style.display = 'none';
             const ctx = document.getElementById('mainChart');
             let cfg = {};
 
+            // ── Try enhanced config first (reads from _chartOpts for live format panel) ──
+            const _ecfg = _enhancedChartConfig(results, type);
+            if (_ecfg) {
+                cfg = _ecfg;
+            } else {
+                // ── HTML charts (no canvas needed) — handled in enhanced, skip switch ──
+                if (['stemleaf','treemap','funnel'].includes(type)) {
+                    // already rendered by _enhancedChartConfig — shouldn't reach here
+                } else {
+                    // ── Fallback switch for charts not in enhanced ──
+                    // (kept for: heatmap which uses custom div, and any unlisted types)
+                    // ── Fallback: charts not covered by enhanced config ──
             switch (type) {
-                case 'bar':
-                    cfg = {
-                        type: 'bar',
-                        data: {
-                            labels: results.slice(0, 15).map(r => r.name),
-                            datasets: [{
-                                label: 'Score',
-                                data: results.slice(0, 15).map(r => r.score),
-                                backgroundColor: 'rgba(0, 212, 255, 0.6)',
-                                borderColor: 'rgba(0, 212, 255, 1)',
-                                borderWidth: 2
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
-                            scales: { y: { beginAtZero: true } }
-                        }
-                    };
-                    break;
-                case 'pie':
-                    const statusCounts = {};
-                    results.forEach(r => { statusCounts[r.status] = (statusCounts[r.status] || 0) + 1; });
-                    cfg = {
-                        type: 'pie',
-                        data: {
-                            labels: Object.keys(statusCounts),
-                            datasets: [{
-                                data: Object.values(statusCounts),
-                                backgroundColor: ['rgba(6, 255, 165, 0.8)', 'rgba(255, 71, 87, 0.8)', 'rgba(0, 212, 255, 0.8)', 'rgba(255, 184, 0, 0.8)', 'rgba(123, 44, 191, 0.8)'],
-                                borderWidth: 2,
-                                borderColor: '#1a1f3a'
-                            }]
-                        },
-                        options: { responsive: true, maintainAspectRatio: false }
-                    };
-                    break;
-                case 'line':
-                    cfg = {
-                        type: 'line',
-                        data: {
-                            labels: results.map((r, i) => i + 1),
-                            datasets: [{
-                                label: 'Score Progression',
-                                data: results.map(r => r.score),
-                                borderColor: 'rgba(0, 212, 255, 1)',
-                                backgroundColor: 'rgba(0, 212, 255, 0.1)',
-                                borderWidth: 3,
-                                fill: true,
-                                tension: 0.4
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            scales: { y: { beginAtZero: true } }
-                        }
-                    };
-                    break;
-                case 'radar':
-                    const top5 = results.slice(0, 5);
-                    cfg = {
-                        type: 'radar',
-                        data: {
-                            labels: top5.map(r => r.name),
-                            datasets: [{
-                                label: 'Top 5',
-                                data: top5.map(r => r.score),
-                                backgroundColor: 'rgba(0, 212, 255, 0.2)',
-                                borderColor: 'rgba(0, 212, 255, 1)',
-                                borderWidth: 2
-                            }]
-                        },
-                        options: { responsive: true, maintainAspectRatio: false }
-                    };
-                    break;
-                case 'doughnut':
-                    const statusCounts2 = {};
-                    results.forEach(r => { statusCounts2[r.status] = (statusCounts2[r.status] || 0) + 1; });
-                    cfg = {
-                        type: 'doughnut',
-                        data: {
-                            labels: Object.keys(statusCounts2),
-                            datasets: [{
-                                data: Object.values(statusCounts2),
-                                backgroundColor: ['rgba(6, 255, 165, 0.8)', 'rgba(255, 71, 87, 0.8)', 'rgba(0, 212, 255, 0.8)', 'rgba(255, 184, 0, 0.8)', 'rgba(123, 44, 191, 0.8)'],
-                                borderWidth: 2,
-                                borderColor: '#1a1f3a'
-                            }]
-                        },
-                        options: { responsive: true, maintainAspectRatio: false }
-                    };
-                    break;
-                case 'horizontal':
-                    cfg = {
-                        type: 'bar',
-                        data: {
-                            labels: results.slice(0, 15).map(r => r.name),
-                            datasets: [{
-                                label: 'Score',
-                                data: results.slice(0, 15).map(r => r.score),
-                                backgroundColor: 'rgba(123, 44, 191, 0.6)',
-                                borderColor: 'rgba(123, 44, 191, 1)',
-                                borderWidth: 2
-                            }]
-                        },
-                        options: {
-                            indexAxis: 'y',
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
-                            scales: { x: { beginAtZero: true } }
-                        }
-                    };
-                    break;
-                case 'polarArea':
-                    cfg = {
-                        type: 'polarArea',
-                        data: {
-                            labels: results.slice(0, 10).map(r => r.name),
-                            datasets: [{
-                                label: 'Scores',
-                                data: results.slice(0, 10).map(r => r.score),
-                                backgroundColor: [
-                                    'rgba(255, 99, 132, 0.6)',
-                                    'rgba(54, 162, 235, 0.6)',
-                                    'rgba(255, 206, 86, 0.6)',
-                                    'rgba(75, 192, 192, 0.6)',
-                                    'rgba(153, 102, 255, 0.6)',
-                                    'rgba(255, 159, 64, 0.6)',
-                                    'rgba(199, 199, 199, 0.6)',
-                                    'rgba(83, 102, 255, 0.6)',
-                                    'rgba(255, 99, 255, 0.6)',
-                                    'rgba(99, 255, 132, 0.6)'
-                                ]
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: { display: true, position: 'right' }
-                            }
-                        }
-                    };
-                    break;
-                case 'bubble':
-                    cfg = {
-                        type: 'bubble',
-                        data: {
-                            datasets: [{
-                                label: 'Performance',
-                                data: results.slice(0, 20).map((r, i) => ({
-                                    x: i + 1,
-                                    y: r.score,
-                                    r: r.score / 5
-                                })),
-                                backgroundColor: 'rgba(0, 212, 255, 0.6)',
-                                borderColor: 'rgba(0, 212, 255, 1)'
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
-                            scales: {
-                                x: { title: { display: true, text: 'Rank' } },
-                                y: { title: { display: true, text: 'Score' }, min: 0, max: 100 }
-                            }
-                        }
-                    };
-                    break;
-                case 'scatterPlot':
-                    cfg = {
-                        type: 'scatter',
-                        data: {
-                            datasets: [{
-                                label: 'Students',
-                                data: results.map((r, i) => ({ x: i + 1, y: r.score })),
-                                backgroundColor: 'rgba(123, 44, 191, 0.6)',
-                                borderColor: 'rgba(123, 44, 191, 1)',
-                                pointRadius: 6
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
-                            scales: {
-                                x: { title: { display: true, text: 'Rank' } },
-                                y: { title: { display: true, text: 'Score' }, min: 0, max: 100 }
-                            }
-                        }
-                    };
-                    break;
-                case 'area':
-                    cfg = {
-                        type: 'line',
-                        data: {
-                            labels: results.slice(0, 20).map((r, i) => `#${i + 1}`),
-                            datasets: [{
-                                label: 'Trend',
-                                data: results.slice(0, 20).map(r => r.score),
-                                backgroundColor: 'rgba(6, 255, 165, 0.3)',
-                                borderColor: 'rgba(6, 255, 165, 1)',
-                                borderWidth: 2,
-                                fill: true,
-                                tension: 0.4
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
-                            scales: { y: { min: 0, max: 100 } }
-                        }
-                    };
-                    break;
-                case 'mixed':
-                    const avgScore = results.reduce((sum, r) => sum + r.score, 0) / results.length;
-                    cfg = {
-                        type: 'bar',
-                        data: {
-                            labels: results.slice(0, 15).map(r => r.name),
-                            datasets: [
-                                {
-                                    type: 'bar',
-                                    label: 'Scores',
-                                    data: results.slice(0, 15).map(r => r.score),
-                                    backgroundColor: 'rgba(0, 212, 255, 0.6)',
-                                    borderColor: 'rgba(0, 212, 255, 1)',
-                                    borderWidth: 2
-                                },
-                                {
-                                    type: 'line',
-                                    label: 'Average',
-                                    data: Array(15).fill(avgScore),
-                                    borderColor: 'rgba(255, 107, 107, 1)',
-                                    borderWidth: 3,
-                                    fill: false,
-                                    pointRadius: 0
-                                }
-                            ]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: true } },
-                            scales: { y: { min: 0, max: 100 } }
-                        }
-                    };
-                    break;
-                case 'histogram': {
-                    const scores = results.map(r => r.score);
-                    const min = Math.floor(Math.min(...scores) / 10) * 10;
-                    const max = Math.ceil(Math.max(...scores) / 10) * 10;
-                    const bins = 10;
-                    const binW = (max - min) / bins;
-                    const counts = Array(bins).fill(0);
-                    scores.forEach(s => {
-                        let b = Math.min(Math.floor((s - min) / binW), bins - 1);
-                        counts[b]++;
-                    });
-                    const labels = Array.from({length:bins}, (_,i) => `${(min+i*binW).toFixed(0)}–${(min+(i+1)*binW).toFixed(0)}`);
-                    // Normal curve overlay
-                    const mean = scores.reduce((a,b)=>a+b,0)/scores.length;
-                    const sd   = Math.sqrt(scores.reduce((s,x)=>s+Math.pow(x-mean,2),0)/scores.length);
-                    const normCurve = Array.from({length:bins}, (_,i) => {
-                        const x = min + (i + 0.5) * binW;
-                        return (scores.length * binW / (sd * Math.sqrt(2*Math.PI))) * Math.exp(-0.5*Math.pow((x-mean)/sd,2));
-                    });
-                    cfg = {
-                        type: 'bar',
-                        data: {
-                            labels,
-                            datasets: [
-                                { label:'Frequency', data:counts, backgroundColor:'rgba(99,102,241,.55)', borderColor:'rgba(99,102,241,1)', borderWidth:1.5, order:2 },
-                                { label:'Normal Curve', data:normCurve, type:'line', borderColor:'rgba(239,68,68,1)', borderWidth:2.5, fill:false, tension:.4, pointRadius:0, order:1 }
-                            ]
-                        },
-                        options: { responsive:true, maintainAspectRatio:false,
-                            plugins:{ legend:{display:true}, tooltip:{ callbacks:{ title: i => `Range: ${i[0].label}` } } },
-                            scales:{ x:{title:{display:true,text:'Score Range'}}, y:{beginAtZero:true,title:{display:true,text:'Students'}} }
-                        }
-                    };
+                case 'radar': {
+                    const top5 = results.slice(0,5);
+                    cfg = { type:'radar', data:{ labels:top5.map(r=>r.name), datasets:[{ label:'Top 5', data:top5.map(r=>r.score), backgroundColor:'rgba(99,102,241,.2)', borderColor:'rgba(99,102,241,1)', borderWidth:2 }]},
+                        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false }, title:{ display:true, text:'Radar — Top 5 Students' }}}};
                     break;
                 }
-                case 'boxplot': {
-                    const scores = [...results.map(r=>r.score)].sort((a,b)=>a-b);
-                    const n = scores.length;
-                    const q1 = scores[Math.floor(n*0.25)];
-                    const median = n%2===0 ? (scores[n/2-1]+scores[n/2])/2 : scores[Math.floor(n/2)];
-                    const q3 = scores[Math.floor(n*0.75)];
-                    const iqr = q3 - q1;
-                    const lo = Math.max(scores[0],  q1 - 1.5*iqr);
-                    const hi = Math.min(scores[n-1], q3 + 1.5*iqr);
-                    const outliers = scores.filter(s => s < lo || s > hi);
-                    // Floating bar trick: whisker as thin bar + IQR box
-                    cfg = {
-                        type: 'bar',
-                        data: {
-                            labels: ['Class Distribution'],
-                            datasets: [
-                                { label:'Whisker (Low→Q1)',  data:[[lo,q1]],     backgroundColor:'rgba(148,163,184,.3)', borderColor:'rgba(148,163,184,.8)', borderWidth:1.5 },
-                                { label:'IQR (Q1→Q3)',       data:[[q1,q3]],     backgroundColor:'rgba(99,102,241,.55)', borderColor:'rgba(99,102,241,1)',   borderWidth:2 },
-                                { label:'Whisker (Q3→Max)', data:[[q3,hi]],     backgroundColor:'rgba(148,163,184,.3)', borderColor:'rgba(148,163,184,.8)', borderWidth:1.5 },
-                                { label:`Median: ${median.toFixed(1)}`, data:[median], type:'scatter', backgroundColor:'rgba(239,68,68,1)', pointRadius:7, pointStyle:'line', rotation:90 }
-                            ]
-                        },
-                        options: { responsive:true, maintainAspectRatio:false, indexAxis:'y',
-                            plugins:{ legend:{display:true},
-                                tooltip:{ callbacks:{ label: ctx => {
-                                    if(ctx.datasetIndex===3) return `Median: ${median.toFixed(1)}`;
-                                    return `Q1:${q1.toFixed(1)} | Q3:${q3.toFixed(1)} | IQR:${iqr.toFixed(1)} | Outliers:${outliers.length}`;
-                                }}}
-                            },
-                            scales:{ x:{ min: Math.min(...scores)-5, max: Math.max(...scores)+5, title:{display:true,text:'Score'} }, y:{display:false} }
-                        }
-                    };
+                case 'polarArea': {
+                    const top6 = results.slice(0,6);
+                    cfg = { type:'polarArea', data:{ labels:top6.map(r=>r.name), datasets:[{ data:top6.map(r=>r.score), backgroundColor:['rgba(99,102,241,.65)','rgba(16,185,129,.65)','rgba(245,158,11,.65)','rgba(239,68,68,.65)','rgba(139,92,246,.65)','rgba(6,182,212,.65)'] }]},
+                        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:true, position:'bottom' }, title:{ display:true, text:'Polar Area — Top 6 Scores' }}}};
                     break;
                 }
-                case 'cdf': {
-                    const sorted = [...results.map(r=>r.score)].sort((a,b)=>a-b);
-                    const n = sorted.length;
-                    const cdfData = sorted.map((s,i) => ({ x:s, y:((i+1)/n*100) }));
-                    cfg = {
-                        type: 'scatter',
-                        data: { datasets:[{
-                            label:'Cumulative %',
-                            data: cdfData,
-                            showLine:true, fill:false,
-                            borderColor:'rgba(99,102,241,1)', backgroundColor:'rgba(99,102,241,.1)',
-                            borderWidth:2.5, pointRadius:2, tension:.3
-                        }] },
-                        options: { responsive:true, maintainAspectRatio:false,
-                            plugins:{ legend:{display:false}, tooltip:{ callbacks:{
-                                label: ctx => `Score ${ctx.parsed.x.toFixed(1)} → ${ctx.parsed.y.toFixed(1)}% of students`
-                            }}},
-                            scales:{
-                                x:{ title:{display:true,text:'Score'} },
-                                y:{ min:0, max:100, title:{display:true,text:'Cumulative %'} }
-                            }
-                        }
-                    };
+                case 'bubble': {
+                    cfg = { type:'bubble', data:{ datasets:[{ label:'Students', data:results.map((r,i)=>({ x:i+1, y:r.score, r:Math.max(4, r.score/10) })), backgroundColor:'rgba(99,102,241,.55)', borderColor:'rgba(99,102,241,.9)' }]},
+                        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false }, title:{ display:true, text:'Bubble Chart — Score by Size' }}, scales:{ x:{ title:{ display:true, text:'Student Index' }}, y:{ title:{ display:true, text:'Score' }}}}};
                     break;
                 }
-                case 'pareto': {
-                    const statusCounts = {};
-                    results.forEach(r => { const k = r.status||'N/A'; statusCounts[k]=(statusCounts[k]||0)+1; });
-                    const sorted = Object.entries(statusCounts).sort((a,b)=>b[1]-a[1]);
-                    const total = results.length;
-                    let cum = 0;
-                    const cumPcts = sorted.map(([,v]) => { cum+=v; return +(cum/total*100).toFixed(1); });
-                    cfg = {
-                        type:'bar',
-                        data:{
-                            labels: sorted.map(([k])=>k),
-                            datasets:[
-                                { label:'Count', data:sorted.map(([,v])=>v), backgroundColor:'rgba(99,102,241,.6)', borderColor:'rgba(99,102,241,1)', borderWidth:1.5, yAxisID:'y', order:2 },
-                                { label:'Cumulative %', data:cumPcts, type:'line', borderColor:'rgba(239,68,68,1)', borderWidth:2.5, fill:false, pointRadius:4, tension:.3, yAxisID:'y1', order:1 }
-                            ]
-                        },
-                        options:{ responsive:true, maintainAspectRatio:false,
-                            plugins:{ legend:{display:true} },
-                            scales:{
-                                y:{ beginAtZero:true, title:{display:true,text:'Count'} },
-                                y1:{ min:0, max:100, position:'right', grid:{drawOnChartArea:false}, title:{display:true,text:'Cumulative %'} }
-                            }
-                        }
-                    };
+                case 'mixed': {
+                    const avg2 = results.reduce((a,r)=>a+r.score,0)/results.length;
+                    cfg = { type:'bar', data:{ labels:results.slice(0,20).map(r=>r.name), datasets:[
+                        { type:'bar', label:'Score', data:results.slice(0,20).map(r=>r.score), backgroundColor:'rgba(99,102,241,.55)', borderColor:'rgba(99,102,241,.9)', borderWidth:1.5, borderRadius:3 },
+                        { type:'line', label:'Average', data:Array(Math.min(20,results.length)).fill(avg2), borderColor:'#f59e0b', borderDash:[6,3], pointRadius:0, borderWidth:2, fill:false }
+                    ]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:true }, title:{ display:true, text:'Mixed Chart — Bars + Average Line' }}, scales:{ x:{ ticks:{ maxRotation:55, font:{size:10} }}, y:{ beginAtZero:true }}}};
                     break;
                 }
-                case 'heatmap': {
-                    // Render as HTML heatmap — hide canvas, inject styled table
-                    const nameIdx = Object.keys(config).find(k=>config[k].role==='name');
-                    const numCols = Object.entries(config).filter(([,c])=>['add','sub'].includes(c.role));
-                    if (numCols.length === 0) {
-                        ctx.parentElement.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--text-muted);"><i class="bi bi-info-circle" style="font-size:2rem;display:block;margin-bottom:.5rem;"></i>Heatmap needs at least one numeric column set to <strong>Add</strong> role.</div>`;
-                        return;
-                    }
-                    const allVals = [];
-                    const rows = results.slice(0,30).map(r => {
-                        const dr = nameIdx ? dataRows.find(row=>row[nameIdx]===r.name) : null;
-                        return numCols.map(([i])=>{ const v=dr?(parseFloat(dr[i])||0):0; allVals.push(v); return v; });
-                    });
-                    const vMin=Math.min(...allVals), vMax=Math.max(...allVals)||1;
-                    const heat=(v)=>{ const t=(v-vMin)/(vMax-vMin); const r=Math.round(239+t*(99-239)), g=Math.round(68+t*(102-68)), b=Math.round(68+t*(241-68)); return `rgb(${r},${g},${b})`; };
-                    const colNames = numCols.map(([i])=>headers[i]||`Col ${i}`);
-                    let tbl = `<div style="overflow:auto;padding:1rem;"><table style="border-collapse:collapse;font-size:.72rem;width:100%;">
-                        <thead><tr><th style="padding:.4rem .6rem;text-align:left;color:var(--text-muted);">Student</th>
-                        ${colNames.map(n=>`<th style="padding:.4rem .5rem;text-align:center;color:var(--text-muted);white-space:nowrap;">${n}</th>`).join('')}
-                        <th style="padding:.4rem .5rem;text-align:center;color:var(--text-muted);">Total</th></tr></thead><tbody>`;
-                    results.slice(0,30).forEach((r,ri) => {
-                        tbl += `<tr><td style="padding:.35rem .6rem;font-weight:600;white-space:nowrap;color:var(--text-primary);">${r.name}</td>`;
-                        rows[ri].forEach(v => { tbl += `<td style="padding:.35rem .5rem;text-align:center;background:${heat(v)};color:white;font-weight:700;border-radius:4px;">${v.toFixed(0)}</td>`; });
-                        tbl += `<td style="padding:.35rem .5rem;text-align:center;font-weight:800;color:var(--text-primary);">${r.score.toFixed(1)}</td></tr>`;
-                    });
-                    tbl += '</tbody></table></div>';
-                    ctx.style.display='none';
-                    let heatDiv = document.getElementById('_heatmapDiv');
-                    if(!heatDiv){ heatDiv=document.createElement('div'); heatDiv.id='_heatmapDiv'; ctx.parentElement.appendChild(heatDiv); }
-                    heatDiv.innerHTML = tbl;
-                    heatDiv.style.display='';
-                    return;
-                }
-
-            case 'violin': {
-                // Kernel density estimation violin shape
-                const scores = results.map(r => r.score).sort((a,b) => a-b);
-                const n = scores.length;
-                const mean = scores.reduce((a,b)=>a+b,0)/n;
-                const sd = Math.sqrt(scores.reduce((s,x)=>s+Math.pow(x-mean,2),0)/n) || 1;
-                const bandwidth = 1.06 * sd * Math.pow(n, -0.2);
-                const kdePoints = 60;
-                const kmin = Math.max(0, Math.floor(Math.min(...scores)) - 10);
-                const kmax = Math.ceil(Math.max(...scores)) + 10;
-                const step = (kmax - kmin) / kdePoints;
-                const xVals = [], kde = [];
-                for (let i = 0; i <= kdePoints; i++) {
-                    const x = kmin + i * step;
-                    xVals.push(x);
-                    const density = scores.reduce((s, xi) => {
-                        const u = (x - xi) / bandwidth;
-                        return s + Math.exp(-0.5*u*u) / (Math.sqrt(2*Math.PI)*bandwidth);
-                    }, 0) / n;
-                    kde.push(density);
-                }
-                const maxKde = Math.max(...kde);
-                cfg = { type: 'line', data: {
-                    labels: xVals.map(x => x.toFixed(1)),
-                    datasets: [
-                        { label: 'Density', data: kde.map(d => (d/maxKde)*100),
-                          borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,.2)',
-                          fill: true, tension: 0.5, pointRadius: 0, borderWidth: 2.5 },
-                        { label: 'Mirror', data: kde.map(d => -(d/maxKde)*100),
-                          borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,.12)',
-                          fill: true, tension: 0.5, pointRadius: 0, borderWidth: 2 }
-                    ]}, options: { responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false },
-                        title: { display: true, text: 'Violin Plot — Score Distribution Density' }},
-                    scales: { x: { title: { display: true, text: 'Score' }},
-                        y: { title: { display: true, text: 'Density (%)' }}} }};
-                break;
-            }
-            case 'dotplot': {
-                const scores = results.map(r => r.score).sort((a,b) => a-b);
-                const bins = {};
-                scores.forEach(s => { const b = Math.round(s); bins[b] = (bins[b]||0)+1; });
-                const dotData = [];
-                Object.entries(bins).forEach(([x, count]) => {
-                    for (let i = 0; i < count; i++) dotData.push({ x: parseFloat(x), y: i + 1 });
-                });
-                cfg = { type: 'bubble', data: {
-                    datasets: [{ label: 'Students', data: dotData.map(d=>({x:d.x,y:d.y,r:5})),
-                      backgroundColor: results.map((_,i) => `hsla(${(i/results.length)*280+220},70%,60%,.75)`),
-                      borderColor: 'transparent' }]},
-                    options: { responsive: true, maintainAspectRatio: false,
-                    plugins: { title: { display: true, text: 'Dot Plot — Individual Student Scores' },
-                        legend: { display: false }},
-                    scales: { x: { title: { display: true, text: 'Score' }},
-                        y: { title: { display: true, text: 'Count (stacked)' }, ticks: { stepSize: 1 }}}}};
-                break;
-            }
-            case 'qqplot': {
-                const scores = [...results.map(r => r.score)].sort((a,b)=>a-b);
-                const n = scores.length;
-                const mean = scores.reduce((a,b)=>a+b,0)/n;
-                const sd = Math.sqrt(scores.reduce((s,x)=>s+Math.pow(x-mean,2),0)/n)||1;
-                // Theoretical quantiles using probit approximation
-                const qqData = scores.map((s,i) => {
-                    const p = (i + 0.5) / n;
-                    // Rational approximation for probit
-                    const t = Math.sqrt(-2*Math.log(Math.min(p, 1-p)));
-                    const c = [2.515517,0.802853,0.010328];
-                    const d = [1.432788,0.189269,0.001308];
-                    let z = t - (c[0]+c[1]*t+c[2]*t*t)/(1+d[0]*t+d[1]*t*t+d[2]*t*t*t);
-                    if (p > 0.5) z = -z;
-                    return { x: parseFloat((mean + sd*z).toFixed(2)), y: parseFloat(s.toFixed(2)) };
-                });
-                const refMin = qqData[0].x, refMax = qqData[qqData.length-1].x;
-                cfg = { type: 'scatter', data: {
-                    datasets: [
-                        { label: 'Observed vs Theoretical', data: qqData,
-                          backgroundColor: 'rgba(99,102,241,.7)', pointRadius: 4, pointHoverRadius: 6 },
-                        { label: 'Normal Reference Line', data: [{x:refMin,y:refMin},{x:refMax,y:refMax}],
-                          type: 'line', borderColor: '#ef4444', borderDash: [5,4], pointRadius: 0, borderWidth: 1.5 }
-                    ]}, options: { responsive: true, maintainAspectRatio: false,
-                    plugins: { title: { display: true, text: 'Q-Q Plot — Normality Check' }},
-                    scales: { x: { title: { display: true, text: 'Theoretical Quantiles' }},
-                        y: { title: { display: true, text: 'Sample Quantiles' }}}}};
-                break;
-            }
-            case 'control': {
-                const scores = results.map(r => r.score);
-                const n = scores.length;
-                const mean = scores.reduce((a,b)=>a+b,0)/n;
-                const sd = Math.sqrt(scores.reduce((s,x)=>s+Math.pow(x-mean,2),0)/n);
-                const ucl = mean + 3*sd, lcl = Math.max(0, mean - 3*sd);
-                const ucl1 = mean + sd, lcl1 = mean - sd;
-                const names = results.map((r,i) => r.name || ('S'+(i+1)));
-                cfg = { type: 'line', data: {
-                    labels: names,
-                    datasets: [
-                        { label: 'Score', data: scores, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,.08)', fill: true, tension: 0.3, pointRadius: 4, pointHoverRadius: 6, borderWidth: 2 },
-                        { label: 'UCL (+3σ)', data: Array(n).fill(ucl), borderColor: '#ef4444', borderDash: [6,3], pointRadius: 0, borderWidth: 1.5, fill: false },
-                        { label: 'Mean', data: Array(n).fill(mean), borderColor: '#10b981', borderDash: [4,4], pointRadius: 0, borderWidth: 1.5, fill: false },
-                        { label: 'LCL (−3σ)', data: Array(n).fill(lcl), borderColor: '#f59e0b', borderDash: [6,3], pointRadius: 0, borderWidth: 1.5, fill: false },
-                    ]}, options: { responsive: true, maintainAspectRatio: false,
-                    plugins: { title: { display: true, text: 'Control Chart — Statistical Process Control' },
-                        legend: { position: 'top' }},
-                    scales: { x: { ticks: { maxTicksLimit: 20, maxRotation: 45 }},
-                        y: { title: { display: true, text: 'Score' }}}}};
-                break;
-            }
-            case 'lollipop': {
-                const sorted = [...results].sort((a,b) => b.score - a.score).slice(0, 35);
-                const accent = '#6366f1';
-                cfg = { type: 'bar', data: {
-                    labels: sorted.map(r => r.name),
-                    datasets: [
-                        { type: 'bar', label: 'Score', data: sorted.map(r => r.score),
-                          backgroundColor: 'rgba(0,0,0,0)', borderColor: 'rgba(0,0,0,0)',
-                          barThickness: 2 },
-                        { type: 'scatter', label: 'Dot', data: sorted.map((r,i) => ({x:i, y:r.score})),
-                          backgroundColor: sorted.map(r => {
-                              const s=(r.status||'').toLowerCase();
-                              return ['fail','f','failing'].includes(s)?'rgba(239,68,68,.85)':'rgba(99,102,241,.85)';
-                          }),
-                          pointRadius: 7, pointHoverRadius: 9, showLine: false }
-                    ]}, options: { responsive: true, maintainAspectRatio: false,
-                    plugins: { title: { display: true, text: 'Lollipop Chart — Score Ranking' },
-                        legend: { display: false }},
-                    scales: { x: { ticks: { maxRotation: 60, font: { size: 10 }}},
-                        y: { min: 0, max: 100 }}}};
-                // Draw stems via custom plugin — use bar as thin stem
-                cfg.data.datasets[0].backgroundColor = sorted.map(r => {
-                    const s=(r.status||'').toLowerCase();
-                    return ['fail','f','failing'].includes(s)?'rgba(239,68,68,.3)':'rgba(99,102,241,.25)';
-                });
-                cfg.data.datasets[0].borderColor = cfg.data.datasets[0].backgroundColor;
-                cfg.data.datasets[0].barThickness = 2;
-                break;
-            }
-            case 'gauge': {
-                // Semi-circle doughnut gauge showing pass rate
-                const passing = results.filter(r => r.status && !['fail','f','failing'].includes((r.status||'').toLowerCase())).length;
-                const passRate = (passing / results.length) * 100;
-                const scores = results.map(r=>r.score);
-                const avg = scores.reduce((a,b)=>a+b,0)/scores.length;
-                const gaugeVal = passRate;
-                const gaugeRemain = 100 - gaugeVal;
-                const color = gaugeVal >= 80 ? '#10b981' : gaugeVal >= 60 ? '#f59e0b' : '#ef4444';
-                cfg = { type: 'doughnut', data: {
-                    labels: ['Pass Rate', 'Remaining'],
-                    datasets: [{ data: [gaugeVal, gaugeRemain],
-                        backgroundColor: [color, 'rgba(209,213,219,.25)'],
-                        borderWidth: 0, circumference: 180, rotation: 270 }]},
-                    options: { responsive: true, maintainAspectRatio: false,
-                    cutout: '75%',
-                    plugins: {
-                        legend: { display: false },
-                        title: { display: true, text: 'Class Performance Gauge' },
-                        tooltip: { callbacks: { label: ctx => ctx.label + ': ' + (ctx.label==='Pass Rate'?gaugeVal.toFixed(1)+'%':gaugeRemain.toFixed(1)+'%') }},
-                    }}};
-                // Add center text via afterDraw plugin
-                cfg.plugins = [{ id: 'gaugeText', afterDraw(chart) {
-                    const {ctx, chartArea:{width,height,top}} = chart;
-                    ctx.save();
-                    const cx = width/2 + chart.chartArea.left, cy = top + height * 0.82;
-                    ctx.font = 'bold 28px Syne, sans-serif';
-                    ctx.fillStyle = color;
-                    ctx.textAlign = 'center';
-                    ctx.fillText(gaugeVal.toFixed(1)+'%', cx, cy);
-                    ctx.font = '600 12px Inter, sans-serif';
-                    ctx.fillStyle = '#6b7280';
-                    ctx.fillText('Pass Rate — Avg: '+avg.toFixed(1), cx, cy+20);
-                    ctx.restore();
-                }}];
-                break;
-            }
-            case 'waterfall': {
-                // Cumulative score waterfall — sorted desc, shows running total
-                const sorted = [...results].sort((a,b) => b.score - a.score).slice(0, 20);
-                let running = 0;
-                const bars = sorted.map(r => { const prev = running; running += r.score; return { name: r.name, score: r.score, start: prev }; });
-                const maxVal = running * 1.05;
-                cfg = { type: 'bar', data: {
-                    labels: sorted.map(r => r.name.split(' ')[0]),
-                    datasets: [
-                        { label: 'Offset', data: bars.map(b => b.start),
-                          backgroundColor: 'transparent', borderColor: 'transparent', stack: 'w' },
-                        { label: 'Score', data: bars.map(b => b.score),
-                          backgroundColor: bars.map(b => {
-                              const s=(sorted.find(r=>r.name===b.name)?.status||'').toLowerCase();
-                              return ['fail','f','failing'].includes(s)?'rgba(239,68,68,.8)':'rgba(99,102,241,.8)';
-                          }),
-                          borderRadius: 3, stack: 'w' }
-                    ]}, options: { responsive: true, maintainAspectRatio: false,
-                    plugins: { title: { display: true, text: 'Waterfall Chart — Cumulative Score Contribution' },
-                        legend: { display: false }},
-                    scales: { x: { stacked: true, ticks: { maxRotation: 60 }},
-                        y: { stacked: true, max: maxVal, title: { display: true, text: 'Cumulative Score' }}}}};
-                break;
-            }
-
-                case 'bar':
-                case 'horizontal':
-                case 'histogram':
-                case 'boxplot':
-                case 'violin':
-                case 'lollipop':
-                case 'control':
-                case 'scatterPlot':
-                case 'qqplot':
-                case 'interval':
-                case 'capability':
-                case 'individual':
-                case 'stemleaf':
-                case 'treemap':
-                case 'funnel':
-                case 'errorbar':
-                case 'runchart': {
-                    const ecfg = _enhancedChartConfig(results, type);
-                    if (ecfg) cfg = ecfg;
+                case 'dotplot': {
+                    const _bins = {}; results.map(r=>r.score).sort((a,b)=>a-b).forEach(s => { const b=Math.round(s); _bins[b]=(_bins[b]||0)+1; });
+                    const dotData = []; Object.entries(_bins).forEach(([x,count]) => { for(let i=0;i<count;i++) dotData.push({x:parseFloat(x),y:i+1,r:5}); });
+                    cfg = { type:'bubble', data:{ datasets:[{ label:'Students', data:dotData, backgroundColor:'rgba(99,102,241,.6)', borderColor:'rgba(99,102,241,.9)', borderWidth:1.5 }]},
+                        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false }, title:{ display:true, text:'Dot Plot — Individual Scores Stacked' }}, scales:{ x:{ title:{ display:true, text:'Score' }}, y:{ title:{ display:true, text:'Count at score' }, beginAtZero:true }}}};
                     break;
                 }
+                default: break;
             }
-
+                } // end fallback
+            } // end else
             // Clean up custom HTML renderers when not in use
             ['_heatmapDiv','_stemleafDiv','_treemapDiv','_funnelDiv'].forEach(id => {
                 const el = document.getElementById(id);
-                if (el && type !== id.replace('_','').replace('Div','')) el.style.display = 'none';
+                if (el && !['heatmap','stemleaf','treemap','funnel'].includes(type)) el.style.display = 'none';
             });
-            const hd = document.getElementById('_heatmapDiv');
-            if(hd) hd.style.display='none';
-            if(ctx) ctx.style.display='';
-            charts.push(new Chart(ctx, cfg));
-
-            // Show format panel for this chart type
+            if(ctx) ctx.style.display = ['stemleaf','treemap','funnel'].includes(type) ? 'none' : '';
+            if(cfg && ctx && ctx.style.display !== 'none') {
+                try { charts.push(new Chart(ctx, cfg)); } catch(e) { console.warn('Chart render error:', type, e); }
+            }
             renderChartFormatPanel(type);
         }
 
@@ -11277,6 +10712,9 @@
                 ['Lowest Score',   low],
                 ['Passing',        pass],
                 ['Failing',        currentResults.length - pass],
+                ['Pass Rate',      ((pass/currentResults.length)*100).toFixed(1)+'%'],
+                ['Std Dev',        (()=>{ const sc=currentResults.map(r=>r.score),n=sc.length,m=sc.reduce((a,b)=>a+b,0)/n; return Math.sqrt(sc.reduce((s,x)=>s+Math.pow(x-m,2),0)/n).toFixed(2); })()],
+                ['Median',         (()=>{ const sc=[...currentResults.map(r=>r.score)].sort((a,b)=>a-b),n=sc.length; return (n%2===0?(sc[n/2-1]+sc[n/2])/2:sc[Math.floor(n/2)]).toFixed(2); })()],
                 [],
                 ['GRADE DISTRIBUTION'],
             ];
@@ -11402,15 +10840,38 @@
 
             charts.forEach(c => { try { c.stop(); } catch(e) {} });
 
-            // Capture chart image before building container
-            let chartImgSrc = null;
-            const canvas = document.getElementById('mainChart');
-            if (canvas) { try { chartImgSrc = canvas.toDataURL('image/png', 1.0); } catch(e) {} }
-
-            setTimeout(() => _buildAndDownloadPDF(btn, origBtnHTML, meta, chartImgSrc), 300);
+            // Capture ALL chart images before building container
+            const pdfChartImgs = [];
+            const singleCont = document.getElementById('singleChartContainer');
+            const mainCvs    = document.getElementById('mainChart');
+            if (mainCvs && singleCont && singleCont.style.display !== 'none') {
+                try { pdfChartImgs.push({ src: mainCvs.toDataURL('image/png',1.0), label: currentChartType||'Chart' }); } catch(e){}
+            }
+            const multiCont = document.getElementById('multiChartContainer');
+            if (multiCont && multiCont.style.display !== 'none') {
+                for (let _i=1;_i<=4;_i++) {
+                    const slot = document.getElementById('chartSlot'+_i);
+                    const cvs  = document.getElementById('chart'+_i);
+                    if (slot && cvs && slot.style.display !== 'none') {
+                        try { pdfChartImgs.push({ src: cvs.toDataURL('image/png',1.0), label: selectedCharts[_i-1]||('Chart '+_i) }); } catch(e){}
+                    }
+                }
+            }
+            // HTML-rendered charts
+            const pdfHtmlCharts = [];
+            ['_stemleafDiv','_treemapDiv','_funnelDiv'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el && el.style.display !== 'none' && el.innerHTML.trim()) {
+                    pdfHtmlCharts.push({ html: el.innerHTML, label: id.replace('_','').replace('Div','') });
+                }
+            });
+            const chartImgSrc = pdfChartImgs.length ? pdfChartImgs[0].src : null; // legacy compat
+            setTimeout(() => _buildAndDownloadPDF(btn, origBtnHTML, meta, chartImgSrc, pdfChartImgs, pdfHtmlCharts), 300);
         }
 
-        function _buildAndDownloadPDF(btn, origBtnHTML, meta, chartImgSrc) {
+        function _buildAndDownloadPDF(btn, origBtnHTML, meta, chartImgSrc, allChartImgs, htmlChartItems) {
+            allChartImgs = allChartImgs || (chartImgSrc ? [{src: chartImgSrc, label: 'Chart'}] : []);
+            htmlChartItems = htmlChartItems || [];
             const restoreBtn = () => {
                 if (btn) { btn.innerHTML = origBtnHTML; btn.disabled = false; }
                 const c = document.getElementById('_pdfContainer');
@@ -11542,12 +11003,19 @@
             }
 
             // ── CHART ──
-            if (chartImgSrc) {
+            if (allChartImgs.length > 0 || htmlChartItems.length > 0) {
                 const chartDiv = document.createElement('div');
-                chartDiv.style.cssText = 'padding:16px 36px;border-bottom:1px solid #e5e7eb;';
-                chartDiv.innerHTML = `
-                    <div style="font-size:11px;font-weight:700;color:#1e3a8a;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px;">Performance Chart</div>
-                    <img src="${chartImgSrc}" style="width:100%;max-height:260px;object-fit:contain;display:block;border:1px solid #e5e7eb;border-radius:6px;"/>`;
+                chartDiv.style.cssText = 'padding:12px 36px 20px;border-bottom:1px solid #e5e7eb;';
+                const _cols = (allChartImgs.length + htmlChartItems.length) === 1 ? '1fr' : '1fr 1fr';
+                let _cGrid = `<div style="font-size:11px;font-weight:700;color:#1e3a8a;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px;">Charts</div><div style="display:grid;grid-template-columns:${_cols};gap:10px;">`;
+                allChartImgs.forEach(c => {
+                    _cGrid += `<div style="border:1px solid #e5e7eb;border-radius:6px;padding:6px;"><div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:4px;">${c.label||'Chart'}</div><img src="${c.src}" style="width:100%;max-height:220px;object-fit:contain;display:block;border-radius:4px;"/></div>`;
+                });
+                htmlChartItems.forEach(c => {
+                    _cGrid += `<div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;"><div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:4px;">${c.label||'Chart'}</div>${c.html}</div>`;
+                });
+                _cGrid += '</div>';
+                chartDiv.innerHTML = _cGrid;
                 pdfContainer.appendChild(chartDiv);
             }
 
@@ -11584,6 +11052,57 @@
             tableHTML += '</tbody></table>';
             tableDiv.innerHTML = tableHTML;
             pdfContainer.appendChild(tableDiv);
+
+            // ── ANALYTICS SECTION ──
+            if (currentAnalytics) {
+                const analyticsDiv = document.createElement('div');
+                analyticsDiv.style.cssText = 'padding:8px 36px 20px;';
+                const { statusSummary, distribution } = currentAnalytics;
+                // Status summary table
+                let statusRows2 = Object.entries(statusSummary).map(([st, info]) => {
+                    const a = info.count ? (info.total/info.count).toFixed(1) : '—';
+                    const isPass = !['fail','f','failing'].includes(st.toLowerCase());
+                    const clr = isPass ? '#166534' : '#991b1b';
+                    const bg  = isPass ? '#f0fdf4' : '#fef2f2';
+                    return `<tr><td style="padding:4px 8px;border:1px solid #e5e7eb;">${st}</td>
+                        <td style="padding:4px 8px;border:1px solid #e5e7eb;text-align:right;font-weight:700;color:${clr};background:${bg};">${info.count}</td>
+                        <td style="padding:4px 8px;border:1px solid #e5e7eb;text-align:right;">${((info.count/total)*100).toFixed(1)}%</td>
+                        <td style="padding:4px 8px;border:1px solid #e5e7eb;text-align:right;">${a}</td></tr>`;
+                }).join('');
+                // Distribution table
+                let distRows2 = distribution.map((b,i) => 
+                    `<tr><td style="padding:4px 8px;border:1px solid #e5e7eb;">${b.from.toFixed(0)}–${b.to.toFixed(0)}</td>
+                        <td style="padding:4px 8px;border:1px solid #e5e7eb;text-align:right;font-weight:700;">${b.count}</td>
+                        <td style="padding:4px 8px;border:1px solid #e5e7eb;text-align:right;">${((b.count/total)*100).toFixed(1)}%</td></tr>`
+                ).join('');
+                analyticsDiv.innerHTML = `
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                        <div>
+                            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#1e3a8a;margin-bottom:6px;letter-spacing:.5px;">Status Summary</div>
+                            <table style="width:100%;border-collapse:collapse;font-size:10px;">
+                                <thead><tr>
+                                    <th style="padding:4px 8px;background:#e8edf5;border:1px solid #c8d4e5;text-align:left;">Status</th>
+                                    <th style="padding:4px 8px;background:#e8edf5;border:1px solid #c8d4e5;text-align:right;">Count</th>
+                                    <th style="padding:4px 8px;background:#e8edf5;border:1px solid #c8d4e5;text-align:right;">%</th>
+                                    <th style="padding:4px 8px;background:#e8edf5;border:1px solid #c8d4e5;text-align:right;">Avg</th>
+                                </tr></thead>
+                                <tbody>${statusRows2}</tbody>
+                            </table>
+                        </div>
+                        <div>
+                            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#1e3a8a;margin-bottom:6px;letter-spacing:.5px;">Score Distribution</div>
+                            <table style="width:100%;border-collapse:collapse;font-size:10px;">
+                                <thead><tr>
+                                    <th style="padding:4px 8px;background:#e8edf5;border:1px solid #c8d4e5;text-align:left;">Range</th>
+                                    <th style="padding:4px 8px;background:#e8edf5;border:1px solid #c8d4e5;text-align:right;">Count</th>
+                                    <th style="padding:4px 8px;background:#e8edf5;border:1px solid #c8d4e5;text-align:right;">%</th>
+                                </tr></thead>
+                                <tbody>${distRows2}</tbody>
+                            </table>
+                        </div>
+                    </div>`;
+                pdfContainer.appendChild(analyticsDiv);
+            }
 
             // ── NOTES ──
             if (meta.notes) {
@@ -11639,14 +11158,16 @@
                 return;
             }
 
-            // ── 1. Capture ALL active charts as images ─────────────────
+            // ── 1. Capture ALL active charts (canvas + HTML types) ─────
             const captureCharts = () => {
-                const imgs = [];
+                const imgs = [], htmlCharts = [];
+                // Canvas charts — single mode
                 const singleContainer = document.getElementById('singleChartContainer');
                 const mainCanvas = document.getElementById('mainChart');
                 if (mainCanvas && singleContainer && singleContainer.style.display !== 'none') {
                     try { imgs.push({ src: mainCanvas.toDataURL('image/png'), label: currentChartType || 'Chart' }); } catch(e){}
                 }
+                // Canvas charts — multi mode
                 const multiContainer = document.getElementById('multiChartContainer');
                 if (multiContainer && multiContainer.style.display !== 'none') {
                     for (let i = 1; i <= 4; i++) {
@@ -11657,9 +11178,16 @@
                         }
                     }
                 }
-                return imgs;
+                // HTML-rendered charts (stemleaf, treemap, funnel)
+                ['_stemleafDiv','_treemapDiv','_funnelDiv'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el && el.style.display !== 'none' && el.innerHTML.trim()) {
+                        htmlCharts.push({ id, html: el.innerHTML, label: id.replace('_','').replace('Div','') });
+                    }
+                });
+                return { imgs, htmlCharts };
             };
-            const chartImages = captureCharts();
+            const { imgs: chartImages, htmlCharts } = captureCharts();
 
             // ── 2. Statistics ──────────────────────────────────────────
             const scores   = currentResults.map(r => r.score);
@@ -11764,17 +11292,23 @@
                     </div>`;
             }
 
-            // ── 5. Chart images HTML ───────────────────────────────────
-            const chartsHTML = chartImages.length ? `
+            // ── 5. Chart images + HTML charts ─────────────────────────
+            const chartImgsHTML = chartImages.map(c=>`
+                <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;padding:.5rem;background:white;">
+                    <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;margin-bottom:.3rem;">${c.label}</div>
+                    <img src="${c.src}" style="width:100%;height:auto;display:block;" />
+                </div>`).join('');
+            const htmlChartItems = htmlCharts.map(c=>`
+                <div style="border:1px solid #e2e8f0;border-radius:8px;padding:.75rem;background:white;">
+                    <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;margin-bottom:.5rem;">${c.label}</div>
+                    ${c.html}
+                </div>`).join('');
+            const allChartItems = chartImgsHTML + htmlChartItems;
+            const chartsHTML = allChartItems ? `
                 <div class="section-break">
-                    <div class="section-title">Charts (${tableViewLabel} Mode)</div>
-                    <div style="display:grid;grid-template-columns:${chartImages.length===1?'1fr':'1fr 1fr'};gap:1rem;">
-                        ${chartImages.map(c=>`
-                            <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;padding:.5rem;background:white;">
-                                <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;margin-bottom:.3rem;">${c.label}</div>
-                                <img src="${c.src}" style="width:100%;height:auto;display:block;" />
-                            </div>
-                        `).join('')}
+                    <div class="section-title">Charts <span class="view-badge">${tableViewLabel}</span></div>
+                    <div style="display:grid;grid-template-columns:${chartImages.length===1&&htmlCharts.length===0?'1fr':'1fr 1fr'};gap:1rem;">
+                        ${allChartItems}
                     </div>
                 </div>` : '';
 
@@ -11791,7 +11325,7 @@
   .cover { background:linear-gradient(135deg,#6366f1,#8b5cf6); color:white; padding:1.5rem 2rem; border-radius:8px; margin-bottom:1.25rem; }
   .cover h1 { font-size:1.5rem; font-weight:900; letter-spacing:-.3px; }
   .cover .meta { font-size:.72rem; opacity:.8; margin-top:.4rem; }
-  .stat-row { display:grid; grid-template-columns:repeat(6,1fr); gap:.5rem; margin-bottom:1.25rem; }
+  .stat-row { display:grid; grid-template-columns:repeat(4,1fr); gap:.5rem; margin-bottom:1.25rem; }
   .stat-box { background:#f8faff; border:1.5px solid #e2e8f0; border-radius:7px; padding:.55rem .4rem; text-align:center; }
   .stat-val { font-size:1.05rem; font-weight:900; color:#1e40af; }
   .stat-lbl { font-size:.58rem; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:.05em; margin-top:2px; }
@@ -11816,10 +11350,12 @@
   <div class="stat-row">
     <div class="stat-box"><div class="stat-val">${n}</div><div class="stat-lbl">Students</div></div>
     <div class="stat-box"><div class="stat-val">${avg.toFixed(1)}</div><div class="stat-lbl">Average</div></div>
+    <div class="stat-box"><div class="stat-val">${passRate}%</div><div class="stat-lbl">Pass Rate</div></div>
     <div class="stat-box"><div class="stat-val">${median.toFixed(1)}</div><div class="stat-lbl">Median</div></div>
     <div class="stat-box"><div class="stat-val">${stdDev.toFixed(2)}</div><div class="stat-lbl">Std Dev</div></div>
     <div class="stat-box"><div class="stat-val" style="color:#059669;">${high.toFixed(1)}</div><div class="stat-lbl">Highest</div></div>
     <div class="stat-box"><div class="stat-val" style="color:#dc2626;">${low.toFixed(1)}</div><div class="stat-lbl">Lowest</div></div>
+    <div class="stat-box"><div class="stat-val">${passing}✓</div><div class="stat-lbl">Passing</div></div>
   </div>
 
   <div class="two-col no-break">
@@ -11920,15 +11456,29 @@
                 csv += row.map(escape).join(',') + '\n';
             });
 
+            // Extended stats for footer
+            const _csvScores = currentResults.map(r=>r.score);
+            const _csvN      = _csvScores.length;
+            const _csvSorted = [..._csvScores].sort((a,b)=>a-b);
+            const _csvMed    = _csvN%2===0?(_csvSorted[_csvN/2-1]+_csvSorted[_csvN/2])/2:_csvSorted[Math.floor(_csvN/2)];
+            const _csvAvgN   = _csvScores.reduce((a,b)=>a+b,0)/_csvN;
+            const _csvSd     = Math.sqrt(_csvScores.reduce((s,x)=>s+Math.pow(x-_csvAvgN,2),0)/_csvN);
+            const _csvQ1     = _csvSorted[Math.floor(_csvN*0.25)];
+            const _csvQ3     = _csvSorted[Math.floor(_csvN*0.75)];
             // Summary footer
             csv += '\n';
-            csv += escape('Summary') + '\n';
-            csv += escape('Average') + ',' + avg + '\n';
-            csv += escape('Highest') + ',' + high + '\n';
-            csv += escape('Lowest') + ',' + low + '\n';
-            csv += escape('Passing') + ',' + passing + '\n';
-            csv += escape('Failing') + ',' + (currentResults.length - passing) + '\n';
+            csv += escape('SUMMARY STATISTICS') + '\n';
+            csv += escape('Average')   + ',' + avg + '\n';
+            csv += escape('Median')    + ',' + _csvMed.toFixed(2) + '\n';
+            csv += escape('Std Dev')   + ',' + _csvSd.toFixed(2) + '\n';
+            csv += escape('Q1 (25th)') + ',' + _csvQ1.toFixed(2) + '\n';
+            csv += escape('Q3 (75th)') + ',' + _csvQ3.toFixed(2) + '\n';
+            csv += escape('Highest')   + ',' + high + '\n';
+            csv += escape('Lowest')    + ',' + low + '\n';
+            csv += escape('Passing')   + ',' + passing + '\n';
+            csv += escape('Failing')   + ',' + (currentResults.length - passing) + '\n';
             csv += escape('Pass Rate') + ',' + ((passing/currentResults.length)*100).toFixed(1) + '%\n';
+            csv += escape('Grading Mode') + ',' + escape(mode) + '\n';
 
             const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
             const url  = URL.createObjectURL(blob);
@@ -15345,6 +14895,14 @@ footer p{opacity:0.6;font-size:0.82rem;}
                     ${fmtToggle('showMean','Show mean line')}
                     ${fmtToggle('showMedian','Show median line')}
                     ${fmtToggle('showTrend','Show trend line')}`,
+
+                gauge: () => `
+                    <div class="fmt-section-title">Display</div>
+                    ${fmtToggle('showPassRate','Show pass rate label')}`,
+
+                waterfall: () => `
+                    <div class="fmt-section-title">Data</div>
+                    ${fmtRange('maxStudents','Max students shown',5,80)}`,
             };
 
             const builderFn = panels[type];
@@ -15755,9 +15313,446 @@ footer p{opacity:0.6;font-size:0.82rem;}
                             scales:{x:{ticks:{maxRotation:55,font:{size:9}}},y:{beginAtZero:false,title:{display:true,text:'Score'}}}}};
                 }
 
+
+                // ── ENHANCED HORIZONTAL BAR ──────────────────────────
+                case 'horizontal': {
+                    const max = o.maxStudents || 30;
+                    const data = results.slice(0, max);
+                    const colors = data.map(r => {
+                        if (!o.colorByStatus) return 'rgba(99,102,241,.65)';
+                        const s = (r.status||'').toLowerCase();
+                        return ['fail','f','failing'].includes(s) ? 'rgba(239,68,68,.7)' : 'rgba(16,185,129,.7)';
+                    });
+                    const datasets = [{ label:'Score', data:data.map(r=>r.score), backgroundColor:colors, borderColor:colors.map(c=>c.replace(/[\d.]+\)$/,'1)')), borderWidth:1.5, borderRadius:o.barRadius||0 }];
+                    if (o.showAvgLine) datasets.push({ type:'line', label:`Mean: ${mean.toFixed(1)}`, data:Array(data.length).fill(mean), borderColor:'#f59e0b', borderDash:[6,3], pointRadius:0, borderWidth:2, fill:false });
+                    return { type:'bar', data:{ labels:data.map(r=>r.name), datasets },
+                        options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+                            plugins:{ legend:{ display:o.showAvgLine }, title:{ display:true, text:'Horizontal Bar — Scores' }},
+                            scales:{ x:{ beginAtZero:true, max:Math.ceil(Math.max(...scores)/10)*10+5 }, y:{ ticks:{ font:{size:10} }}}}};
+                }
+
+                // ── ENHANCED LINE ─────────────────────────────────────
+                case 'line': {
+                    const datasets = [{ label:'Score', data:results.map(r=>r.score), borderColor:'rgba(99,102,241,1)', backgroundColor:'rgba(99,102,241,0.1)', borderWidth:2.5, fill:o.fillArea, tension:o.tension??0.35, pointRadius:o.showPoints?4:0, pointHoverRadius:6 }];
+                    if (o.showAvgLine) datasets.push({ label:`Mean: ${mean.toFixed(1)}`, data:Array(n).fill(mean), borderColor:'#f59e0b', borderDash:[6,3], pointRadius:0, borderWidth:2, fill:false });
+                    return { type:'line', data:{ labels:results.map((r,i)=>r.name||(i+1)), datasets },
+                        options:{ responsive:true, maintainAspectRatio:false,
+                            plugins:{ legend:{ display:o.showAvgLine }, title:{ display:true, text:'Score Line Chart' }},
+                            scales:{ x:{ ticks:{ maxRotation:55, font:{size:10} }}, y:{ beginAtZero:false, title:{ display:true, text:'Score' }}}}};
+                }
+
+                // ── ENHANCED AREA ─────────────────────────────────────
+                case 'area': {
+                    const fillRgba = `rgba(99,102,241,${o.fillOpacity??0.25})`;
+                    return { type:'line', data:{ labels:results.map((r,i)=>r.name||(i+1)), datasets:[
+                        { label:'Score', data:results.map(r=>r.score), borderColor:'rgba(99,102,241,1)', backgroundColor:fillRgba, borderWidth:2.5, fill:true, tension:o.tension??0.35, pointRadius:o.showPoints?4:0, pointHoverRadius:6 }
+                    ]},
+                        options:{ responsive:true, maintainAspectRatio:false,
+                            plugins:{ legend:{ display:false }, title:{ display:true, text:'Score Area Chart' }},
+                            scales:{ x:{ ticks:{ maxRotation:55, font:{size:10} }}, y:{ beginAtZero:false, title:{ display:true, text:'Score' }}}}};
+                }
+
+                // ── ENHANCED PIE ──────────────────────────────────────
+                case 'pie': {
+                    const _sc = {}; results.forEach(r => { _sc[r.status||'N/A'] = (_sc[r.status||'N/A']||0)+1; });
+                    const PCOLS = ['rgba(16,185,129,.8)','rgba(239,68,68,.8)','rgba(99,102,241,.8)','rgba(245,158,11,.8)','rgba(139,92,246,.8)','rgba(6,182,212,.8)'];
+                    return { type:'pie', data:{ labels:Object.keys(_sc), datasets:[{ data:Object.values(_sc), backgroundColor:PCOLS, borderColor:PCOLS.map(c=>c.replace(/[\d.]+\)$/,'1)')), borderWidth:2 }]},
+                        options:{ responsive:true, maintainAspectRatio:false,
+                            plugins:{ legend:{ display:o.showLegend??true, position:'bottom', labels:{font:{size:11}} },
+                                title:{ display:true, text:'Grade / Status Distribution' },
+                                tooltip:{ callbacks:{ label: ctx => {
+                                    const total2 = ctx.dataset.data.reduce((a,b)=>a+b,0);
+                                    const pct = ((ctx.parsed/total2)*100).toFixed(1);
+                                    return o.showPercentages ? `${ctx.label}: ${ctx.parsed} (${pct}%)` : `${ctx.label}: ${ctx.parsed}`;
+                                }}}}}}; 
+                }
+
+                // ── ENHANCED DOUGHNUT ─────────────────────────────────
+                case 'doughnut': {
+                    const _sc2 = {}; results.forEach(r => { _sc2[r.status||'N/A'] = (_sc2[r.status||'N/A']||0)+1; });
+                    const DCOLS = ['rgba(16,185,129,.8)','rgba(239,68,68,.8)','rgba(99,102,241,.8)','rgba(245,158,11,.8)','rgba(139,92,246,.8)'];
+                    return { type:'doughnut', data:{ labels:Object.keys(_sc2), datasets:[{ data:Object.values(_sc2), backgroundColor:DCOLS, borderColor:DCOLS.map(c=>c.replace(/[\d.]+\)$/,'1)')), borderWidth:2 }]},
+                        options:{ responsive:true, maintainAspectRatio:false, cutout:(o.cutout??60)+'%',
+                            plugins:{ legend:{ display:o.showLegend??true, position:'bottom', labels:{font:{size:11}} },
+                                title:{ display:true, text:'Grade Distribution (Doughnut)' },
+                                tooltip:{ callbacks:{ label: ctx => {
+                                    const total2 = ctx.dataset.data.reduce((a,b)=>a+b,0);
+                                    const pct = ((ctx.parsed/total2)*100).toFixed(1);
+                                    return o.showPercentages ? `${ctx.label}: ${ctx.parsed} (${pct}%)` : `${ctx.label}: ${ctx.parsed}`;
+                                }}}}}}; 
+                }
+
+                // ── ENHANCED CDF ──────────────────────────────────────
+                case 'cdf': {
+                    const cdfSorted = [...scores].sort((a,b)=>a-b);
+                    const cdfData = cdfSorted.map((s,i) => ({ x:s, y:+((i+1)/n*100).toFixed(2) }));
+                    const datasets = [{ label:'Cumulative %', data:cdfData, showLine:true, fill:false, borderColor:'rgba(99,102,241,1)', backgroundColor:'rgba(99,102,241,.1)', tension:o.smooth?0.4:0, pointRadius:n>50?0:3, borderWidth:2.5 }];
+                    if (o.showMedianLine) datasets.push({ label:`Median: ${median.toFixed(1)}`, data:[{x:median,y:0},{x:median,y:100}], showLine:true, fill:false, borderColor:'#10b981', borderDash:[5,3], pointRadius:0, borderWidth:2 });
+                    return { type:'scatter', data:{ datasets },
+                        options:{ responsive:true, maintainAspectRatio:false,
+                            plugins:{ title:{ display:true, text:'Cumulative Distribution Function (CDF)' }, legend:{ display:o.showMedianLine } },
+                            scales:{ x:{ title:{ display:true, text:'Score' }}, y:{ title:{ display:true, text:'Cumulative %' }, min:0, max:100 }}}};
+                }
+
+                // ── ENHANCED PARETO ───────────────────────────────────
+                case 'pareto': {
+                    const _pcounts = {}; results.forEach(r => { const k=r.status||'N/A'; _pcounts[k]=(_pcounts[k]||0)+1; });
+                    const sorted2 = Object.entries(_pcounts).sort((a,b)=>b[1]-a[1]).slice(0, o.maxBars||20);
+                    let cum2 = 0;
+                    const cumPcts = sorted2.map(([,v]) => { cum2+=v; return +(cum2/n*100).toFixed(1); });
+                    const datasets2 = [{ type:'bar', label:'Count', data:sorted2.map(([,v])=>v), backgroundColor:'rgba(99,102,241,.65)', borderColor:'rgba(99,102,241,.9)', borderWidth:1.5, borderRadius:3, order:2 }];
+                    if (o.showCumulativeLine??true) datasets2.push({ type:'line', label:'Cumulative %', data:cumPcts, borderColor:'#f59e0b', borderWidth:2.5, pointRadius:4, fill:false, yAxisID:'y2', order:1 });
+                    return { type:'bar', data:{ labels:sorted2.map(([k])=>k), datasets:datasets2 },
+                        options:{ responsive:true, maintainAspectRatio:false,
+                            plugins:{ legend:{ display:true }, title:{ display:true, text:'Pareto Chart — Grade/Status Distribution' }},
+                            scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Students' }}, y2:{ position:'right', min:0, max:100, title:{ display:true, text:'Cumulative %' }, grid:{ drawOnChartArea:false }}}}};
+                }
+
+                // ── ENHANCED GAUGE ────────────────────────────────────
+                case 'gauge': {
+                    const passing2 = results.filter(r=>r.status&&!['fail','f','failing'].includes((r.status||'').toLowerCase())).length;
+                    const gPct = (passing2/n*100);
+                    const gColor = gPct>=80?'#10b981':gPct>=60?'#f59e0b':'#ef4444';
+                    return { type:'doughnut', data:{ datasets:[{ data:[gPct, 100-gPct], backgroundColor:[gColor,'rgba(148,163,184,.15)'], borderWidth:0, circumference:180, rotation:270 }]},
+                        options:{ responsive:true, maintainAspectRatio:false, cutout:'72%',
+                            plugins:{ legend:{ display:false }, title:{ display:true, text:`Pass Rate Gauge — ${gPct.toFixed(1)}% (${passing2}/${n} passing)` },
+                                tooltip:{ callbacks:{ label: ctx => ctx.dataIndex===0?[`Pass Rate: ${gPct.toFixed(1)}%`,`Passing: ${passing2}`,`Failing: ${n-passing2}`]:['Failing'] }}}}};
+                }
+
+                // ── ENHANCED WATERFALL ────────────────────────────────
+                case 'waterfall': {
+                    const maxS = o.maxStudents||30;
+                    const wSorted = [...results].sort((a,b)=>b.score-a.score).slice(0,maxS);
+                    let running = 0;
+                    const bars = wSorted.map(r => { const prev=running; running+=r.score; return {name:r.name.split(' ')[0], score:r.score, start:prev}; });
+                    const maxVal = running*1.05;
+                    const barColors = bars.map(b => {
+                        const s = (wSorted.find(r=>r.name.split(' ')[0]===b.name)?.status||'').toLowerCase();
+                        return ['fail','f','failing'].includes(s)?'rgba(239,68,68,.7)':'rgba(99,102,241,.8)';
+                    });
+                    return { type:'bar', data:{ labels:bars.map(b=>b.name), datasets:[
+                        { label:'Offset', data:bars.map(b=>b.start), backgroundColor:'rgba(0,0,0,0)', borderColor:'rgba(0,0,0,0)', barThickness:18, stack:'w' },
+                        { label:'Score', data:bars.map(b=>b.score), backgroundColor:barColors, borderColor:barColors.map(c=>c.replace(/[\d.]+\)$/,'1)')), borderRadius:3, stack:'w' }
+                    ]},
+                        options:{ responsive:true, maintainAspectRatio:false,
+                            plugins:{ title:{ display:true, text:'Waterfall — Cumulative Score Contribution' }, legend:{ display:false }},
+                            scales:{ x:{ stacked:true, ticks:{ maxRotation:60, font:{size:9} }}, y:{ stacked:true, max:maxVal, title:{ display:true, text:'Cumulative Score' }}}}};
+                }
+
                 default: return null;
             }
         }
+
+                // ════════════════════════════════════════════════════════════════
+        //  ERD SCHEMA VISUALIZER
+        // ════════════════════════════════════════════════════════════════
+
+        // ── Type inference ──────────────────────────────────────────────
+        function _inferColumnType(colIdx) {
+            if (!dataRows || dataRows.length === 0) return 'text';
+            const samples = dataRows.slice(0, 20).map(r => r[colIdx]).filter(v => v !== '' && v !== null && v !== undefined);
+            if (samples.length === 0) return 'text';
+            const numericCount = samples.filter(v => !isNaN(parseFloat(v)) && isFinite(v)).length;
+            if (numericCount / samples.length >= 0.8) return 'numeric';
+            const dateRe = /^d{1,4}[-/]d{1,2}[-/]d{1,4}$|^d{1,2}[/-]d{1,2}[/-]d{2,4}$/;
+            const dateCount = samples.filter(v => dateRe.test(String(v).trim())).length;
+            if (dateCount / samples.length >= 0.6) return 'date';
+            return 'text';
+        }
+
+        function _getColumnStats(colIdx, type) {
+            if (!dataRows || dataRows.length === 0) return null;
+            const vals = dataRows.map(r => r[colIdx]).filter(v => v !== '' && v !== null && v !== undefined);
+            if (vals.length === 0) return null;
+            if (type === 'numeric') {
+                const nums = vals.map(v => parseFloat(v)).filter(v => !isNaN(v));
+                if (nums.length === 0) return { nulls: vals.length };
+                const sum = nums.reduce((a,b)=>a+b,0);
+                const min = Math.min(...nums), max = Math.max(...nums);
+                const mean = sum / nums.length;
+                const sd = Math.sqrt(nums.reduce((s,x)=>s+Math.pow(x-mean,2),0)/nums.length);
+                return { min: min.toFixed(1), max: max.toFixed(1), mean: mean.toFixed(1), sd: sd.toFixed(2), count: nums.length, nulls: dataRows.length - nums.length };
+            } else {
+                const unique = new Set(vals.map(v=>String(v).trim())).size;
+                const top = Object.entries(vals.reduce((acc,v)=>{ const k=String(v).trim(); acc[k]=(acc[k]||0)+1; return acc; },{}))
+                    .sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,c])=>k.substring(0,12)+(k.length>12?'…':'')+' ('+c+')').join(', ');
+                return { unique, count: vals.length, top, nulls: dataRows.length - vals.length };
+            }
+        }
+
+        // ── Role meta ──────────────────────────────────────────────────
+        const ERD_ROLE_META = {
+            name:       { label:'NAME',      color:'#6366f1', bg:'rgba(99,102,241,.12)',  icon:'bi-person-fill',        desc:'Student identifier' },
+            add:        { label:'ADD',        color:'#10b981', bg:'rgba(16,185,129,.12)',  icon:'bi-plus-circle-fill',   desc:'Adds to final score' },
+            sub:        { label:'SUB',        color:'#ef4444', bg:'rgba(239,68,68,.12)',   icon:'bi-dash-circle-fill',   desc:'Subtracts from score' },
+            multiply:   { label:'MULT',       color:'#f97316', bg:'rgba(249,115,22,.12)',  icon:'bi-x-circle-fill',      desc:'Score multiplier' },
+            category:   { label:'CATEGORY',   color:'#3b82f6', bg:'rgba(59,130,246,.12)',  icon:'bi-folder-fill',        desc:'Grouping / category' },
+            weight:     { label:'WEIGHT',     color:'#8b5cf6', bg:'rgba(139,92,246,.12)',  icon:'bi-speedometer2',       desc:'Credit-hour weight' },
+            bonus:      { label:'BONUS',      color:'#f59e0b', bg:'rgba(245,158,11,.12)',  icon:'bi-star-fill',          desc:'Bonus points' },
+            threshold:  { label:'THRESHOLD',  color:'#06b6d4', bg:'rgba(6,182,212,.12)',   icon:'bi-bar-chart-line-fill',desc:'Minimum threshold' },
+            normalize:  { label:'NORMALIZE',  color:'#14b8a6', bg:'rgba(20,184,166,.12)',  icon:'bi-arrow-up-right-circle-fill', desc:'Normalized score' },
+            metadata:   { label:'INFO',       color:'#6b7280', bg:'rgba(107,114,128,.1)',  icon:'bi-info-circle-fill',   desc:'Extra information' },
+            ignore:     { label:'IGNORE',     color:'#9ca3af', bg:'rgba(156,163,175,.08)', icon:'bi-eye-slash-fill',     desc:'Not used in grading' },
+            _unmapped:  { label:'UNMAPPED',   color:'#d1d5db', bg:'rgba(209,213,219,.08)', icon:'bi-question-circle',    desc:'Click header to assign role' },
+        };
+
+        const TYPE_META = {
+            numeric: { icon:'🔢', label:'Numeric', color:'#10b981' },
+            text:    { icon:'🔤', label:'Text',    color:'#6366f1' },
+            date:    { icon:'📅', label:'Date',    color:'#f59e0b' },
+        };
+
+        // ── Open / Close ────────────────────────────────────────────────
+        function openERDSchema() {
+            if (!headers || headers.length === 0) {
+                showToast('Upload and select a header row first', 'warning');
+                return;
+            }
+            _renderERD();
+            document.getElementById('erdOverlay').style.display = 'block';
+            const panel = document.getElementById('erdPanel');
+            panel.style.display = 'flex';
+            requestAnimationFrame(() => panel.classList.add('open'));
+        }
+
+        function closeERDSchema() {
+            const panel = document.getElementById('erdPanel');
+            panel.classList.remove('open');
+            setTimeout(() => {
+                panel.style.display = 'none';
+                document.getElementById('erdOverlay').style.display = 'none';
+            }, 360);
+        }
+
+        // ── Main render ─────────────────────────────────────────────────
+        function _renderERD() {
+            const n = headers.length;
+            const fileName = window._lastFileName || 'Assessment Data';
+            const tableName = fileName.replace(/\.xlsx?|\.csv/i,'').substring(0,32);
+
+            // Per-column data
+            const cols = headers.map((h, i) => {
+                const type  = _inferColumnType(i);
+                const stats = _getColumnStats(i, type);
+                const role  = config[i]?.role || '_unmapped';
+                const meta  = ERD_ROLE_META[role] || ERD_ROLE_META._unmapped;
+                const tm    = TYPE_META[type];
+                const isPK  = role === 'name';
+                const isFK  = false;
+                return { idx:i, name:h||('Col '+(i+1)), type, stats, role, meta, tm, isPK };
+            });
+
+            // Update subtitle
+            const mapped = cols.filter(c=>c.role!=='_unmapped').length;
+            const el = document.getElementById('erdSubtitle');
+            if (el) el.textContent = `${n} columns · ${mapped} mapped · ${dataRows.length} rows`;
+
+            // Render legend
+            _renderERDLegend(cols);
+
+            // SVG dimensions
+            const CARD_W   = 580;
+            const ROW_H    = 44;
+            const HDR_H    = 52;
+            const STAT_H   = 22;
+            const PADDING  = 20;
+
+            // Calculate total height
+            let svgH = HDR_H + PADDING;
+            cols.forEach(c => {
+                svgH += ROW_H;
+                if (c.stats) svgH += STAT_H;
+            });
+            svgH += PADDING;
+
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+                || ['dataua','midnight'].includes(document.documentElement.getAttribute('data-theme'));
+            const surfaceCol  = isDark ? '#1e2538' : '#ffffff';
+            const borderCol   = isDark ? '#2d3a52' : '#e2e8f0';
+            const textPrimary = isDark ? '#e8edf7' : '#111827';
+            const textMuted   = isDark ? '#7a8ba6' : '#6b7280';
+            const textSec     = isDark ? '#a8b4cc' : '#374151';
+            const bgSec       = isDark ? '#252e44' : '#f8faff';
+
+            // Build SVG rows
+            let rowsHTML = '';
+            let y = HDR_H;
+
+            cols.forEach((c, ci) => {
+                const rm = c.meta;
+                const tm = c.tm;
+                const rowBg = ci % 2 === 0 ? surfaceCol : bgSec;
+                const isUnmapped = c.role === '_unmapped';
+
+                // Main row
+                rowsHTML += `
+                <g class="erd-row-hover" onclick="openColumnModal(${c.idx})" transform="translate(0,${y})">
+                    <rect x="1" y="0" width="${CARD_W-2}" height="${ROW_H}"
+                        fill="${rowBg}" stroke="${borderCol}" stroke-width="0.5"/>
+
+                    <!-- PK icon -->
+                    ${c.isPK ? `<text x="14" y="${ROW_H/2+5}" font-size="13" text-anchor="middle">🔑</text>` :
+                      `<circle cx="14" cy="${ROW_H/2}" r="5" fill="${rm.color}" opacity="${isUnmapped?0.3:0.7}"/>`}
+
+                    <!-- Column name -->
+                    <text x="30" y="${ROW_H/2-4}" font-size="12.5" font-weight="${c.isPK?'800':'600'}"
+                        fill="${c.isPK ? rm.color : textPrimary}" font-family="Inter,sans-serif">${_esc(c.name.substring(0,28))}${c.name.length>28?'…':''}</text>
+
+                    <!-- Type badge -->
+                    <text x="30" y="${ROW_H/2+10}" font-size="10" fill="${tm.color}"
+                        font-family="Inter,sans-serif" font-weight="600">${tm.icon} ${tm.label}</text>
+
+                    <!-- Role badge -->
+                    ${!isUnmapped ? `
+                    <rect x="${CARD_W-130}" y="${ROW_H/2-11}" width="80" height="18" rx="9"
+                        fill="${rm.bg}" stroke="${rm.color}" stroke-width="1"/>
+                    <text x="${CARD_W-90}" y="${ROW_H/2+1}" font-size="9.5" font-weight="800"
+                        fill="${rm.color}" text-anchor="middle" font-family="Inter,sans-serif">${rm.label}</text>
+                    ` : `
+                    <rect x="${CARD_W-130}" y="${ROW_H/2-11}" width="80" height="18" rx="9"
+                        fill="none" stroke="${borderCol}" stroke-width="1" stroke-dasharray="3,2"/>
+                    <text x="${CARD_W-90}" y="${ROW_H/2+1}" font-size="9.5" font-weight="600"
+                        fill="${textMuted}" text-anchor="middle" font-family="Inter,sans-serif">UNMAPPED</text>
+                    `}
+
+                    <!-- Weight badge (if has weight) -->
+                    ${config[c.idx]?.w && config[c.idx].w !== 1 ? `
+                    <rect x="${CARD_W-44}" y="${ROW_H/2-9}" width="32" height="16" rx="8"
+                        fill="rgba(245,158,11,.12)" stroke="rgba(245,158,11,.5)" stroke-width="1"/>
+                    <text x="${CARD_W-28}" y="${ROW_H/2+2}" font-size="9" font-weight="700"
+                        fill="#f59e0b" text-anchor="middle" font-family="Inter,sans-serif">×${config[c.idx].w}</text>
+                    ` : ''}
+
+                    <!-- Click hint -->
+                    <text x="${CARD_W-10}" y="${ROW_H/2+4}" font-size="10" fill="${textMuted}"
+                        text-anchor="end" font-family="Inter,sans-serif">✎</text>
+                </g>`;
+                y += ROW_H;
+
+                // Stats sub-row
+                if (c.stats) {
+                    const s = c.stats;
+                    let statText = '';
+                    if (c.type === 'numeric') {
+                        statText = `min ${s.min} · max ${s.max} · mean ${s.mean} · σ ${s.sd} · n=${s.count}${s.nulls>0?' · '+s.nulls+' missing':''}`;
+                    } else {
+                        statText = `${s.unique} unique values · ${s.count} filled${s.nulls>0?' · '+s.nulls+' missing':''}  ${s.top?'  Top: '+s.top:''}`;
+                    }
+                    rowsHTML += `
+                    <g transform="translate(0,${y})">
+                        <rect x="1" y="0" width="${CARD_W-2}" height="${STAT_H}"
+                            fill="${ci%2===0?bgSec:surfaceCol}" stroke="${borderCol}" stroke-width="0.5"/>
+                        <text x="30" y="${STAT_H/2+4}" font-size="9.5" fill="${textMuted}"
+                            font-family="Inter,monospace" font-style="italic">${_esc(statText.substring(0,80))}${statText.length>80?'…':''}</text>
+                    </g>`;
+                    y += STAT_H;
+                }
+            });
+
+            // Assemble SVG
+            const svgContent = `<svg xmlns="http://www.w3.org/2000/svg"
+                width="${CARD_W}" height="${svgH}" viewBox="0 0 ${CARD_W} ${svgH}"
+                style="max-width:100%;font-family:Inter,sans-serif;">
+
+                <defs>
+                    <filter id="erd-shadow">
+                        <feDropShadow dx="0" dy="2" stdDeviation="6" flood-opacity="0.12"/>
+                    </filter>
+                    <linearGradient id="erd-hdr" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stop-color="#6366f1"/>
+                        <stop offset="100%" stop-color="#8b5cf6"/>
+                    </linearGradient>
+                </defs>
+
+                <!-- Card shadow -->
+                <rect x="2" y="2" width="${CARD_W-4}" height="${svgH-4}" rx="12"
+                    fill="${surfaceCol}" filter="url(#erd-shadow)" stroke="${borderCol}" stroke-width="1.5"/>
+
+                <!-- Header bar -->
+                <rect x="1" y="1" width="${CARD_W-2}" height="${HDR_H}" rx="12"
+                    fill="url(#erd-hdr)"/>
+                <rect x="1" y="${HDR_H-12}" width="${CARD_W-2}" height="12" fill="url(#erd-hdr)"/>
+
+                <!-- Table icon -->
+                <rect x="14" y="13" width="24" height="24" rx="6" fill="rgba(255,255,255,.2)"/>
+                <text x="26" y="30" font-size="13" text-anchor="middle" fill="white">⊞</text>
+
+                <!-- Table name -->
+                <text x="48" y="28" font-size="14" font-weight="800" fill="white"
+                    font-family="Inter,sans-serif">${_esc(tableName)}</text>
+
+                <!-- Row/col counts -->
+                <text x="48" y="44" font-size="10" fill="rgba(255,255,255,.75)"
+                    font-family="Inter,sans-serif">${dataRows.length} rows · ${n} columns</text>
+
+                <!-- Column count badge -->
+                <rect x="${CARD_W-60}" y="16" width="46" height="20" rx="10"
+                    fill="rgba(255,255,255,.2)" stroke="rgba(255,255,255,.35)" stroke-width="1"/>
+                <text x="${CARD_W-37}" y="30" font-size="10" font-weight="700" fill="white"
+                    text-anchor="middle" font-family="Inter,sans-serif">${n} cols</text>
+
+                <!-- Column rows -->
+                <g transform="translate(0,${HDR_H})">
+                    ${rowsHTML}
+                </g>
+
+                <!-- Bottom rounded cap -->
+                <rect x="1" y="${svgH-13}" width="${CARD_W-2}" height="12" rx="0"
+                    fill="${surfaceCol}" stroke="${borderCol}" stroke-width="0.5"/>
+                <rect x="1" y="${svgH-14}" width="${CARD_W-2}" height="14" rx="12"
+                    fill="${surfaceCol}" stroke="${borderCol}" stroke-width="1.5"/>
+
+            </svg>`;
+
+            document.getElementById('erdCanvas').innerHTML = svgContent;
+            window._lastERDSvg = svgContent;
+        }
+
+        function _renderERDLegend(cols) {
+            const legend = document.getElementById('erdLegend');
+            if (!legend) return;
+            // Count roles
+            const roleCounts = {};
+            cols.forEach(c => { roleCounts[c.role] = (roleCounts[c.role]||0)+1; });
+            const parts = Object.entries(roleCounts).map(([role, cnt]) => {
+                const m = ERD_ROLE_META[role] || ERD_ROLE_META._unmapped;
+                return `<span style="display:inline-flex;align-items:center;gap:.3rem;background:${m.bg};border:1px solid ${m.color}33;border-radius:99px;padding:.18rem .55rem;font-size:.67rem;font-weight:700;color:${m.color};">
+                    <i class="bi ${m.icon}"></i>${m.label} <span style="opacity:.7;">(${cnt})</span>
+                </span>`;
+            }).join('');
+            legend.innerHTML = `<span style="font-size:.6rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin-right:.35rem;">Legend</span>` + parts;
+        }
+
+        function _esc(str) {
+            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        // ── Export ERD as SVG ───────────────────────────────────────────
+        function exportERDasSVG() {
+            const svg = window._lastERDSvg;
+            if (!svg) { showToast('No schema to export', 'warning'); return; }
+            const blob = new Blob([svg], { type: 'image/svg+xml' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            const fname = (window._lastFileName || 'schema').replace(/\.xlsx?|\.csv/i,'');
+            a.download = fname + '_schema.svg';
+            a.click();
+            URL.revokeObjectURL(a.href);
+            showToast('Schema exported as SVG', 'success');
+        }
+
+        // ── Show/hide Schema button based on whether headers are loaded ──
+        function _updateSchemaBtn() {
+            const hasHeaders = headers && headers.length > 0;
+            const btn1 = document.getElementById('btnSchemaView');
+            const btn2 = document.getElementById('sidebarSchemaBtn');
+            if (btn1) btn1.style.display = hasHeaders ? 'flex' : 'none';
+            if (btn2) btn2.style.display = hasHeaders ? '' : 'none';
+        }
+
+        // ── Re-render ERD when roles change ─────────────────────────────
+        // Hook into updateConfigUI so schema stays live
+        const _origUpdateConfigUI = typeof updateConfigUI === 'function' ? updateConfigUI : null;
 
                 function startNewAssessment() {
             // Destroy existing charts to free memory
@@ -15765,6 +15760,7 @@ footer p{opacity:0.6;font-size:0.82rem;}
 
             // Reset all global state
             raw = []; headers = []; dataRows = []; config = {};
+            setTimeout(_updateSchemaBtn, 50);
             currentResults = null; currentChartType = 'bar'; currentTableView = 'ranked';
             currentMode = 'passfail'; currentAnalytics = null;
             multiChartMode = false; selectedCharts = [];
